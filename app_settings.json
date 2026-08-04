@@ -1,0 +1,23 @@
+{
+  "model": "gpt-oss:120b-cloud",
+  "server_url": "http://127.0.0.1:11434",
+  "system_template": "You are a helpful assistant.",
+  "mem_limit": 10,
+  "active_character": "Dungeon master",
+  "active_workspace": "default",
+  "whatsapp_enabled": true,
+  "whatsapp_phone": "",
+  "proactive_chat_enabled": false,
+  "proactive_idle_seconds": 300,
+  "proactive_check_seconds": 60,
+  "openai_api_key": "",
+  "gemini_api_key": "",
+  "claude_api_key": "",
+  "grok_api_key": "",
+  "voice_reply_enabled": false,
+  "task_reminder_enabled": false,
+  "task_reminder_minutes": 20,
+  "telegram_token": "",
+  "web_enabled": false,
+  "voice_server_enabled": false
+}

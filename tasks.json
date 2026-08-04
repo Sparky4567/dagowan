@@ -1,0 +1,17 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "text": "Write documentation",
+      "status": "o",
+      "timestamp": "2026-08-01T10:30:31.529Z"
+    },
+    {
+      "id": 2,
+      "text": "Build bun ollama chat feature",
+      "status": "f",
+      "timestamp": "2026-08-01T10:30:31.527Z",
+      "updated_at": "2026-08-01T10:30:31.532Z"
+    }
+  ]
+}

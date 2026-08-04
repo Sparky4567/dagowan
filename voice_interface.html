@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dagowan Voice AI — Local Duplex Voice Bridge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: radial-gradient(circle at 50% 30%, #151828 0%, #0a0b10 100%);
+            --card-bg: rgba(22, 26, 42, 0.75);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-cyan: #00f0ff;
+            --accent-pink: #ff007f;
+            --accent-purple: #7b2cbf;
+            --text-primary: #f0f3ff;
+            --text-secondary: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 24px;
+            overflow-x: hidden;
+        }
+
+        header {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-badge {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+        }
+
+        .logo-title {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ffffff, var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--accent-cyan);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-cyan);
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.6; }
+        }
+
+        main {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 32px;
+            margin: auto;
+        }
+
+        /* Dagowan Interactive Voice Orb */
+        .orb-wrapper {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .orb-glow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 240, 255, 0.4) 0%, rgba(123, 44, 191, 0.2) 60%, transparent 80%);
+            filter: blur(20px);
+            transition: all 0.5s ease;
+            animation: float-glow 4s ease-in-out infinite alternate;
+        }
+
+        .orb-core {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00f0ff 0%, #7b2cbf 50%, #ff007f 100%);
+            box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(0, 240, 255, 0.5);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .orb-icon {
+            font-size: 48px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+
+        /* States */
+        .orb-wrapper.listening .orb-core {
+            transform: scale(1.15);
+            background: linear-gradient(135deg, #00f0ff, #0072ff);
+            box-shadow: 0 0 60px rgba(0, 240, 255, 0.8);
+        }
+
+        .orb-wrapper.thinking .orb-core {
+            animation: spin-orb 2s linear infinite;
+            background: linear-gradient(135deg, #7b2cbf, #e0aaff);
+            box-shadow: 0 0 60px rgba(123, 44, 191, 0.8);
+        }
+
+        .orb-wrapper.speaking .orb-core {
+            animation: pulse-speaking 0.8s ease-in-out infinite alternate;
+            background: linear-gradient(135deg, #ff007f, #00f0ff);
+            box-shadow: 0 0 70px rgba(255, 0, 127, 0.9);
+        }
+
+        @keyframes float-glow {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        @keyframes spin-orb {
+            0% { transform: rotate(0deg) scale(1.05); }
+            100% { transform: rotate(360deg) scale(1.05); }
+        }
+
+        @keyframes pulse-speaking {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.25); }
+        }
+
+        /* Audio Visualizer Waveform Canvas */
+        canvas#visualizer {
+            width: 100%;
+            max-width: 400px;
+            height: 60px;
+            border-radius: 12px;
+        }
+
+        .state-label {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        /* Transcript Container */
+        .transcript-box {
+            width: 100%;
+            height: 240px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            backdrop-filter: blur(12px);
+        }
+
+        .message-bubble {
+            max-width: 85%;
+            padding: 12px 18px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        .message-bubble.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 114, 255, 0.2));
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-bubble.assistant {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Controls */
+        .controls-group {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 30px;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, var(--accent-cyan), #0072ff);
+            color: #000;
+            font-weight: 700;
+            border: none;
+        }
+
+        .btn.recording {
+            background: linear-gradient(135deg, var(--accent-pink), #ff4757);
+            color: #fff;
+            animation: pulse-dot 1s infinite;
+        }
+        .chat-input-row {
+            width: 100%;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #textInput {
+            flex: 1;
+            padding: 14px 22px;
+            border-radius: 30px;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            backdrop-filter: blur(12px);
+            transition: all 0.2s ease;
+        }
+
+        #textInput:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo-group">
+            <div class="logo-badge">🎙</div>
+            <div>
+                <div class="logo-title">Dagowan Voice AI</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Local Full-Duplex Socket Bridge</div>
+            </div>
+        </div>
+        <div class="status-badge">
+            <div class="status-dot"></div>
+            <span id="connStatus">Connected (ws://127.0.0.1:8767/ws)</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="state-label" id="stateLabel">Tap Orb or Hold Mic to Speak</div>
+
+        <!-- Dagowan Interactive Voice Orb -->
+        <div class="orb-wrapper" id="orbWrapper">
+            <div class="orb-glow"></div>
+            <div class="orb-core">
+                <div class="orb-icon" id="orbIcon">🎙</div>
+            </div>
+        </div>
+
+        <canvas id="visualizer"></canvas>
+
+        <!-- Live Conversation Transcript -->
+        <div class="transcript-box" id="transcriptBox">
+            <div class="message-bubble assistant">
+                👋 Hello! I am your local voice assistant. Tap the glowing orb, hold the mic button, or type a text message below.
+            </div>
+        </div>
+
+        <!-- Text Chat Input Row -->
+        <div class="chat-input-row">
+            <input type="text" id="textInput" placeholder="Type a message or speak..." autocomplete="off" />
+            <button class="btn primary" id="sendBtn">✈️ Send</button>
+        </div>
+
+        <div class="controls-group">
+            <button class="btn primary" id="micBtn">🎙 Hold to Speak</button>
+            <button class="btn" id="duplexToggle">🔄 Continuous Voice: OFF</button>
+            <button class="btn" id="clearBtn">🧹 Clear Transcript</button>
+        </div>
+    </main>
+
+    <script>
+        const wsUrl = `ws://${window.location.host}/ws`;
+        let socket = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let isDuplexMode = false;
+        let audioCtx = null;
+        let analyser = null;
+
+        const orbWrapper = document.getElementById("orbWrapper");
+        const orbIcon = document.getElementById("orbIcon");
+        const stateLabel = document.getElementById("stateLabel");
+        const connStatus = document.getElementById("connStatus");
+        const transcriptBox = document.getElementById("transcriptBox");
+        const micBtn = document.getElementById("micBtn");
+        const duplexToggle = document.getElementById("duplexToggle");
+        const clearBtn = document.getElementById("clearBtn");
+        const canvas = document.getElementById("visualizer");
+        const canvasCtx = canvas.getContext("2d");
+
+        function connectWebSocket() {
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                connStatus.innerText = "Connected to Local Voice Socket";
+                console.log("WebSocket connected!");
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleServerEvent(data);
+            };
+
+            socket.onclose = () => {
+                connStatus.innerText = "Disconnected. Reconnecting...";
+                setTimeout(connectWebSocket, 2000);
+            };
+        }
+
+        function setOrbState(state) {
+            orbWrapper.className = "orb-wrapper " + state;
+            if (state === "listening") {
+                stateLabel.innerText = "Listening...";
+                orbIcon.innerText = "🗣";
+            } else if (state === "transcribing") {
+                stateLabel.innerText = "Transcribing Local Voice...";
+                orbIcon.innerText = "⚡";
+            } else if (state === "thinking") {
+                stateLabel.innerText = "Thinking...";
+                orbIcon.innerText = "🧠";
+            } else if (state === "speaking") {
+                stateLabel.innerText = "Speaking (Local MMS-TTS)...";
+                orbIcon.innerText = "🔊";
+            } else {
+                stateLabel.innerText = isDuplexMode ? "Continuous Mode Active — Speak Any Time" : "Tap Orb to Speak";
+                orbIcon.innerText = "🎙";
+            }
+        }
+
+        function appendMessage(role, text) {
+            const bubble = document.createElement("div");
+            bubble.className = `message-bubble ${role}`;
+            bubble.innerText = text;
+            transcriptBox.appendChild(bubble);
+            transcriptBox.scrollTop = transcriptBox.scrollHeight;
+        }
+
+        function handleServerEvent(data) {
+            if (data.event === "state_change") {
+                setOrbState(data.state);
+            } else if (data.event === "stt_transcript") {
+                appendMessage("user", data.text);
+                setOrbState("thinking");
+            } else if (data.event === "llm_complete") {
+                appendMessage("assistant", data.text);
+            } else if (data.event === "tts_audio") {
+                setOrbState("speaking");
+                playAudioBuffer(data.audio);
+            }
+        }
+
+        let mediaStream = null;
+
+        function getSupportedAudioMimeType() {
+            const types = [
+                "audio/webm;codecs=opus",
+                "audio/webm",
+                "audio/mp4",
+                "audio/ogg;codecs=opus",
+                "audio/ogg"
+            ];
+            for (const t of types) {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+            }
+            return "";
+        }
+
+        async function playAudioBuffer(base64Wav) {
+            try {
+                const binary = atob(base64Wav);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === "suspended") {
+                    await audioCtx.resume();
+                }
+                const decoded = await audioCtx.decodeAudioData(bytes.buffer);
+                const source = audioCtx.createBufferSource();
+                source.buffer = decoded;
+                source.connect(audioCtx.destination);
+                source.onended = () => {
+                    setOrbState("idle");
+                    if (isDuplexMode) startRecording();
+                };
+                source.start(0);
+            } catch (playErr) {
+                console.error("Audio playback error:", playErr);
+                setOrbState("idle");
+            }
+        }
+
+        async function startRecording() {
+            if (isRecording) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === "suspended") {
+                    await audioCtx.resume();
+                }
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mimeType = getSupportedAudioMimeType();
+                const options = mimeType ? { mimeType } : {};
+
+                mediaRecorder = new MediaRecorder(mediaStream, options);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    if (mediaStream) {
+                        mediaStream.getTracks().forEach((track) => track.stop());
+                        mediaStream = null;
+                    }
+
+                    if (!audioChunks || audioChunks.length === 0) {
+                        setOrbState("idle");
+                        return;
+                    }
+
+                    const recordMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+                    const blob = new Blob(audioChunks, { type: recordMime });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = () => {
+                        const result = reader.result || "";
+                        const base64 = result.includes(",") ? result.split(",")[1] : result;
+                        if (socket && socket.readyState === WebSocket.OPEN && base64) {
+                            setOrbState("transcribing");
+                            socket.send(JSON.stringify({ event: "audio_data", audio: base64, mimeType: recordMime }));
+                        } else {
+                            setOrbState("idle");
+                        }
+                    };
+                };
+
+                mediaRecorder.start(100);
+                isRecording = true;
+                setOrbState("listening");
+                micBtn.classList.add("recording");
+                micBtn.innerText = "🛑 Stop & Send";
+            } catch (err) {
+                alert("Microphone permission required: " + err.message);
+                setOrbState("idle");
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording || !mediaRecorder) return;
+            try {
+                if (mediaRecorder.state !== "inactive") {
+                    try {
+                        mediaRecorder.requestData();
+                    } catch (_) {}
+                    mediaRecorder.stop();
+                }
+            } catch (err) {
+                console.error("Stop recording error:", err);
+            }
+            isRecording = false;
+            micBtn.classList.remove("recording");
+            micBtn.innerText = "🎙 Hold to Speak";
+        }
+
+        orbWrapper.addEventListener("click", () => {
+            if (isRecording) stopRecording();
+            else startRecording();
+        });
+
+        micBtn.addEventListener("click", () => {
+            if (isRecording) stopRecording();
+            else startRecording();
+        });
+
+        duplexToggle.addEventListener("click", () => {
+            isDuplexMode = !isDuplexMode;
+            duplexToggle.innerText = `🔄 Continuous Voice: ${isDuplexMode ? 'ON' : 'OFF'}`;
+            duplexToggle.classList.toggle("primary", isDuplexMode);
+        });
+
+        const textInput = document.getElementById("textInput");
+        const sendBtn = document.getElementById("sendBtn");
+
+        function sendTextMessage() {
+            const text = textInput.value.trim();
+            if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+            socket.send(JSON.stringify({ event: "text_prompt", text: text }));
+            textInput.value = "";
+        }
+
+        sendBtn.addEventListener("click", sendTextMessage);
+        textInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") sendTextMessage();
+        });
+
+        clearBtn.addEventListener("click", () => {
+            transcriptBox.innerHTML = "";
+            appendMessage("assistant", "Transcript cleared.");
+        });
+
+        connectWebSocket();
+    </script>
+</body>
+</html>

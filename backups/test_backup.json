@@ -1,0 +1,47 @@
+{
+  "app": "llama-bun",
+  "version": "1.0",
+  "exported_at": "2026-08-01T10:30:31.535Z",
+  "app_settings": {
+    "model": "gpt-oss:120b-cloud",
+    "server_url": "http://localhost:11434",
+    "system_template": "You are a helpful assistant.",
+    "mem_limit": 10,
+    "active_character": "main",
+    "active_workspace": "default",
+    "proactive_chat_enabled": false,
+    "proactive_idle_seconds": 300,
+    "proactive_check_seconds": 60
+  },
+  "memories": [
+    {
+      "timestamp": "2026-08-01T10:30:31.512Z",
+      "text": "[user] Hey"
+    },
+    {
+      "timestamp": "2026-08-01T10:30:31.512Z",
+      "text": "[assistant] Hey there! 👋 How’s it going? What can I help you with today?"
+    },
+    {
+      "timestamp": "2026-08-01T10:30:31.512Z",
+      "text": "Test memory entry 1"
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1,
+      "text": "Write documentation",
+      "status": "o",
+      "timestamp": "2026-08-01T10:30:31.529Z"
+    },
+    {
+      "id": 2,
+      "text": "Build bun ollama chat feature",
+      "status": "f",
+      "timestamp": "2026-08-01T10:30:31.527Z",
+      "updated_at": "2026-08-01T10:30:31.532Z"
+    }
+  ],
+  "characters": null,
+  "sessions": null
+}

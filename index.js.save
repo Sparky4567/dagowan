@@ -1,0 +1,25 @@
+import ollama from "ollama";
+import readline from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
+
+async function OllamaChat() {
+    const rl = readline.createInterface({ input, output });
+
+    const userInput = await rl.question("Type something: ");
+
+    const response = await ollama.chat({
+        model: "gpt-oss:120b-cloud",
+        messages: [
+            {
+                role: "user",
+                content: userInput
+            }
+        ]
+    });
+
+    console.log(response.message.content);
+
+    rl.close();
+}
+
+OllamaChat().catch(console.error
