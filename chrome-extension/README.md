@@ -19,7 +19,7 @@ as `voice_interface.html` over WebSocket — no cloud, no extra server.
   - `@security-status`, `@unlock <pin>`, `@lock`, `@set-security-pin`, `@remove-security-pin`
   - `@otp-status`, `@otp-set`, `@otp-login <code>`, `@otp-lock`, `@otp-remove <code>`
   - While PIN/OTP is set, every `@` control command — including `@help` — needs `@otp-login` first, then `@unlock`. Regular chat always works.
-- **Supported commands:** the side panel talks to the same dispatcher as Telegram/WhatsApp — `@youtube-play`/`@play`, `@spotify-play`, `@blog`, `@astro-post`, `@fact-check`, `@browser-*`, `@cast-*`, `@make`, `@create-file`, `@remember`, tasks, `@stats`, `@models`, `@sessions`, and more (full list in `@help` / `README.md` → `@ Commands Reference`). Quick buttons for `@help`, `@sessions`, `@stats`, `@models`, `@get-tasks`; anything else can be typed.
+- **Supported commands:** the side panel talks to the same dispatcher as Telegram/WhatsApp — `@youtube-play`/`@play`, `@spotify-play`, `@blog`, `@fact-check`, `@browser-*`, `@cast-*`, `@make`, `@create-file`, `@remember`, tasks, `@stats`, `@models`, `@sessions`, and more (full list in `@help` / `README.md` → `@ Commands Reference`). Quick buttons for `@help`, `@sessions`, `@stats`, `@models`, `@get-tasks`; anything else can be typed.
 - **Lock badge (🔒/🔓):** tracks PIN/OTP state from server replies (including the dynamic `security_unlock_minutes` wording) and re-checks `@security-status` whenever the panel becomes visible again.
 
 ## Files

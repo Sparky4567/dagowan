@@ -33,12 +33,6 @@ services:
       CAST_PORT: "${CAST_PORT:-}"
       CAST_TRANSCODE: "${CAST_TRANSCODE:-}"
       CAST_MAX_HEIGHT: "${CAST_MAX_HEIGHT:-}"
-      # Astro publishing (@astro-post): point at the mounted checkout below
-      # (empty default = leave app_settings.json / @astro-path value alone).
-      ASTRO_PROJECT_PATH: "${ASTRO_PROJECT_PATH:-}"
-      ASTRO_BACKUP_DIR: "${ASTRO_BACKUP_DIR:-}"
-      ASTRO_DEFAULT_LANG: "${ASTRO_DEFAULT_LANG:-}"
-      ASTRO_DEFAULT_TEMPLATE: "${ASTRO_DEFAULT_TEMPLATE:-}"
     # NOTE: @cast TV discovery (SSDP/mDNS multicast) and the TV-pull relay
     # need the container on the real LAN. On Linux, uncomment the next line
     # (bridge mode + published ports cannot carry multicast; on Docker
@@ -67,12 +61,6 @@ services:
       # keeps the linked WhatsApp session. Use `@export-settings` / `./backups`
       # for portable backups.
       - dagowan-config:/app/config-state
-      # Astro publishing (@astro-post): the container has no checkout by
-      # itself — mount yours and set ASTRO_PROJECT_PATH to match, e.g.:
-      #   ASTRO_HOST_PATH=/home/user/github/artefaktas-astro ./dockerize.sh run
-      # (dockerize.sh mounts it at /astro and exports ASTRO_PROJECT_PATH).
-      # For `up`, uncomment and edit:
-      # - ${ASTRO_HOST_PATH}:/astro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: ["--web"]

@@ -17,9 +17,6 @@ REM   IMAGE, TAG, CONTAINER, OLLAMA_HOST, WHATSAPP_PORT, WHATSAPP_STATUS_PORT,
 REM   VOICE_PORT / WEB_PORT, OPENAI_API_KEY, GEMINI_API_KEY, CLAUDE_API_KEY,
 REM   GROK_API_KEY, WHATSAPP_PHONE, WHATSAPP_ENABLED, WEB_ENABLED,
 REM   WHATSAPP_QR_MODE (auto^|qr^|pairing^|off), TELEGRAM_TOKEN
-REM   ASTRO_HOST_PATH (host Astro checkout to mount),
-REM   ASTRO_PROJECT_PATH (container path, default /astro when mounting),
-REM   ASTRO_BACKUP_DIR, ASTRO_DEFAULT_LANG, ASTRO_DEFAULT_TEMPLATE
 REM
 REM WhatsApp is opt-in: the container starts `--web` by default and adds
 REM `--whatsapp` only when WHATSAPP_ENABLED=1 or WHATSAPP_PHONE is set.
@@ -68,11 +65,6 @@ if exist ".env" (
       if /i "!k!"=="WEB_ENABLED" set "WEB_ENABLED=!v!"
       if /i "!k!"=="WHATSAPP_QR_MODE" set "WHATSAPP_QR_MODE=!v!"
       if /i "!k!"=="TELEGRAM_TOKEN" set "TELEGRAM_TOKEN=!v!"
-      if /i "!k!"=="ASTRO_HOST_PATH" set "ASTRO_HOST_PATH=!v!"
-      if /i "!k!"=="ASTRO_PROJECT_PATH" set "ASTRO_PROJECT_PATH=!v!"
-      if /i "!k!"=="ASTRO_BACKUP_DIR" set "ASTRO_BACKUP_DIR=!v!"
-      if /i "!k!"=="ASTRO_DEFAULT_LANG" set "ASTRO_DEFAULT_LANG=!v!"
-      if /i "!k!"=="ASTRO_DEFAULT_TEMPLATE" set "ASTRO_DEFAULT_TEMPLATE=!v!"
     )
   )
 )
@@ -177,26 +169,10 @@ for %%F in (app_settings.json characters.json memory.json chat_sessions.json tas
   if exist "%CD%\%%F" set "JSON_MOUNTS=!JSON_MOUNTS! -v ""%CD%\%%F:/app/%%F"""
 )
 
-REM Astro publishing (@astro-post): mount a host Astro checkout.
-set "ASTRO_MOUNT="
-if defined ASTRO_HOST_PATH (
-  if exist "%ASTRO_HOST_PATH%" (
-    if not defined ASTRO_PROJECT_PATH set "ASTRO_PROJECT_PATH=/astro"
-    set "ASTRO_MOUNT=-v ""%ASTRO_HOST_PATH%:%ASTRO_PROJECT_PATH%"""
-  ) else (
-    echo [WARN] ASTRO_HOST_PATH not found: %ASTRO_HOST_PATH% ^(Astro stays unmounted^)
-  )
-)
-
 echo [INFO] Starting '%CONTAINER%' from %FULL_IMAGE% ...
 echo [INFO] Web UI:      http://127.0.0.1:%VOICE_PORT%
 echo [INFO] WhatsApp QR: http://127.0.0.1:%WHATSAPP_STATUS_PORT%/qr
 echo [INFO] Ollama:      %OLLAMA_HOST%
-if defined ASTRO_MOUNT (
-  echo [INFO] Astro:      %ASTRO_HOST_PATH% -^> %ASTRO_PROJECT_PATH% ^(use @astro-status in-app^)
-) else (
-  echo [INFO] Astro:      not mounted ^(set ASTRO_HOST_PATH to enable @astro-post^)
-)
 echo [INFO] CLI args:    %CMD_ARGS%
 
 REM Build optional -e flags (only for vars that are defined).
@@ -210,12 +186,8 @@ if defined WHATSAPP_ENABLED set "EXTRA_ENVS=%EXTRA_ENVS% -e WHATSAPP_ENABLED=%WH
 if defined WEB_ENABLED set "EXTRA_ENVS=%EXTRA_ENVS% -e WEB_ENABLED=%WEB_ENABLED%"
 if defined WHATSAPP_QR_MODE set "EXTRA_ENVS=%EXTRA_ENVS% -e WHATSAPP_QR_MODE=%WHATSAPP_QR_MODE%"
 if defined TELEGRAM_TOKEN set "EXTRA_ENVS=%EXTRA_ENVS% -e TELEGRAM_TOKEN=%TELEGRAM_TOKEN%"
-if defined ASTRO_PROJECT_PATH set "EXTRA_ENVS=%EXTRA_ENVS% -e ASTRO_PROJECT_PATH=%ASTRO_PROJECT_PATH%"
-if defined ASTRO_BACKUP_DIR set "EXTRA_ENVS=%EXTRA_ENVS% -e ASTRO_BACKUP_DIR=%ASTRO_BACKUP_DIR%"
-if defined ASTRO_DEFAULT_LANG set "EXTRA_ENVS=%EXTRA_ENVS% -e ASTRO_DEFAULT_LANG=%ASTRO_DEFAULT_LANG%"
-if defined ASTRO_DEFAULT_TEMPLATE set "EXTRA_ENVS=%EXTRA_ENVS% -e ASTRO_DEFAULT_TEMPLATE=%ASTRO_DEFAULT_TEMPLATE%"
 
-docker run %DETACH% %INTERACTIVE% --name "%CONTAINER%" -p "%WHATSAPP_PORT%:8765" -p "%WHATSAPP_STATUS_PORT%:8766" -p "%VOICE_PORT%:8767" --add-host=host.docker.internal:host-gateway -e BIND_HOST=0.0.0.0 -e HOST=0.0.0.0 -e "OLLAMA_HOST=%OLLAMA_HOST%" -e "WHATSAPP_PORT=8765" -e "WHATSAPP_STATUS_PORT=8766" -e "VOICE_PORT=8767" -e "WEB_PORT=8767" %EXTRA_ENVS% -v dagowan-data:/app/data -v dagowan-wa-auth:/app/whatsapp_bridge/auth -v dagowan-config:/app/config-state -v "%CD%\notes:/app/notes" -v "%CD%\pdfs:/app/pdfs" -v "%CD%\projects:/app/projects" -v "%CD%\backups:/app/backups" -v "%CD%\logs:/app/logs" -v "%CD%\tmp:/app/tmp" %JSON_MOUNTS% %ASTRO_MOUNT% "%FULL_IMAGE%" %CMD_ARGS%
+docker run %DETACH% %INTERACTIVE% --name "%CONTAINER%" -p "%WHATSAPP_PORT%:8765" -p "%WHATSAPP_STATUS_PORT%:8766" -p "%VOICE_PORT%:8767" --add-host=host.docker.internal:host-gateway -e BIND_HOST=0.0.0.0 -e HOST=0.0.0.0 -e "OLLAMA_HOST=%OLLAMA_HOST%" -e "WHATSAPP_PORT=8765" -e "WHATSAPP_STATUS_PORT=8766" -e "VOICE_PORT=8767" -e "WEB_PORT=8767" %EXTRA_ENVS% -v dagowan-data:/app/data -v dagowan-wa-auth:/app/whatsapp_bridge/auth -v dagowan-config:/app/config-state -v "%CD%\notes:/app/notes" -v "%CD%\pdfs:/app/pdfs" -v "%CD%\projects:/app/projects" -v "%CD%\backups:/app/backups" -v "%CD%\logs:/app/logs" -v "%CD%\tmp:/app/tmp" %JSON_MOUNTS% "%FULL_IMAGE%" %CMD_ARGS%
 exit /b %ERRORLEVEL%
 
 :up

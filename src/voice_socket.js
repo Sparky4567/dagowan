@@ -37,17 +37,6 @@ import {
 } from "./browser.js";
 import { playSpotify as playSpotifyViaApi, playYoutube as playYoutubeViaApi } from "./play_api.js";
 import { detectBlogIntent, draftBlog as draftBlogViaApi } from "./blog_api.js";
-import {
-    buildAstroSite as buildAstroSiteViaApi,
-    detectAstroIntent,
-    formatAstroResult,
-    getAstroStatus,
-    listAstroPosts,
-    parseAstroInput,
-    publishAstroPost as publishAstroPostViaApi,
-    publishAstroToGit,
-    syncAstroVault,
-} from "./astro_blog.js";
 import { checkFactClaim as checkFactClaimViaApi, formatFactCheckResult, parseFactCheckInput } from "./factcheck_api.js";
 import { parseCastInput, runCastCommand } from "./cast/caster.js";
 import { buildCommandsHelp } from "./commands.js";
@@ -273,7 +262,7 @@ export class LocalVoiceSocketBridge {
                 }
                 if (isSurfaceLocked(this.settings, WEB_SCOPE)) {
                     const voiceChars = (this.characterStore && this.characterStore.characters) || [];
-                    if (isProbablyControlCommand(userText, voiceChars) || detectBlogIntent(userText) || detectAstroIntent(userText)) {
+                    if (isProbablyControlCommand(userText, voiceChars) || detectBlogIntent(userText)) {
                         this.send(ws, { event: "state_change", state: "idle" });
                         this.send(ws, { event: "llm_complete", text: lockedMessage(this.settings, WEB_SCOPE) });
                         return;
@@ -455,7 +444,7 @@ export class LocalVoiceSocketBridge {
                 }
                 if (isSurfaceLocked(this.settings, WEB_SCOPE)) {
                     const webChars = (this.characterStore && this.characterStore.characters) || [];
-                    if (isProbablyControlCommand(trimmedText, webChars) || detectBlogIntent(trimmedText) || detectAstroIntent(trimmedText)) {
+                    if (isProbablyControlCommand(trimmedText, webChars) || detectBlogIntent(trimmedText)) {
                         this.send(ws, { event: "state_change", state: "idle" });
                         this.send(ws, { event: "llm_complete", text: lockedMessage(this.settings, WEB_SCOPE) });
                         return;
@@ -541,82 +530,6 @@ export class LocalVoiceSocketBridge {
                     const res = await playSpotifyViaApi(parsed.query, this.settings, { show: parsed.show });
                     done(formatSpotifyPlayResult(res));
                     return;
-                }
-
-                // Astro publishing - @astro-post / @astro-build / @astro-vault /
-                // @astro-list / @astro-publish / @astro-status / @astro-path
-                {
-                    const astroParsed = parseAstroInput(cmdText);
-                    if (astroParsed) {
-                        if (astroParsed.action === "path") {
-                            if (!astroParsed.path) {
-                                const st = getAstroStatus(this.settings);
-                                done(`📁 Astro project path: "${st.project}" (${st.configured ? `${st.posts} post(s)` : "missing — set with @astro-path <dir>"})`);
-                            } else {
-                                this.settings.astro_project_path = astroParsed.path;
-                                try { saveSettings(this.settings); } catch {}
-                                done(`📁 Astro project path saved: "${astroParsed.path}"`);
-                            }
-                            return;
-                        }
-                        if (astroParsed.action === "status") {
-                            done(formatAstroResult({ success: true, action: "status", status: getAstroStatus(this.settings) }));
-                            return;
-                        }
-                        if (astroParsed.action === "list") {
-                            const res = listAstroPosts(this.settings, { limit: astroParsed.limit });
-                            done(formatAstroResult({ success: res.success, action: "list", files: res.files, error: res.error }));
-                            return;
-                        }
-                        if (astroParsed.action === "build") {
-                            done(formatAstroResult(await buildAstroSiteViaApi(this.settings, {})));
-                            return;
-                        }
-                        if (astroParsed.action === "vault") {
-                            done(formatAstroResult(syncAstroVault(this.settings, {})));
-                            return;
-                        }
-                        if (astroParsed.action === "publish") {
-                            done(formatAstroResult(await publishAstroToGit(this.settings, { message: astroParsed.message }, null)));
-                            return;
-                        }
-                        if (astroParsed.action === "post") {
-                            if (!astroParsed.topic) {
-                                done("⚠️ Usage: @astro-post <topic> [--lang lt|en] [--template daily|generic] [--no-push]");
-                                return;
-                            }
-                            const res = await publishAstroPostViaApi(astroParsed.topic, this.settings, {
-                                title: astroParsed.title,
-                                lang: astroParsed.lang,
-                                template: astroParsed.template,
-                                date: astroParsed.date,
-                                slug: astroParsed.slug,
-                                description: astroParsed.description,
-                                message: astroParsed.message || `astro: ${astroParsed.topic}`.slice(0, 200),
-                                dryRun: astroParsed.dryRun,
-                                build: astroParsed.build,
-                                push: astroParsed.push,
-                                vault: astroParsed.vault,
-                                settings: this.settings,
-                                ollamaClient: ollama || null,
-                                characterPersona: composeSystemTemplate(activeChar),
-                                characterName: activeChar.name,
-                            });
-                            done(formatAstroResult(res));
-                            return;
-                        }
-                    }
-                    const astroIntent = detectAstroIntent(trimmedText);
-                    if (astroIntent) {
-                        const res = await publishAstroPostViaApi(astroIntent.topic, this.settings, {
-                            settings: this.settings,
-                            ollamaClient: ollama || null,
-                            characterPersona: composeSystemTemplate(activeChar),
-                            characterName: activeChar.name,
-                        });
-                        done(formatAstroResult(res));
-                        return;
-                    }
                 }
 
                 // Blog drafts - @blog / @wordpress / @blogger / @post + natural callouts

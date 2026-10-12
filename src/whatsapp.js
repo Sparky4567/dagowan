@@ -44,17 +44,6 @@ import {
 } from "./browser.js";
 import { playSpotify as playSpotifyViaApi, playYoutube as playYoutubeViaApi } from "./play_api.js";
 import { detectBlogIntent, draftBlog as draftBlogViaApi } from "./blog_api.js";
-import {
-    buildAstroSite as buildAstroSiteViaApi,
-    detectAstroIntent,
-    formatAstroResult,
-    getAstroStatus,
-    listAstroPosts,
-    parseAstroInput,
-    publishAstroPost as publishAstroPostViaApi,
-    publishAstroToGit,
-    syncAstroVault,
-} from "./astro_blog.js";
 import { checkFactClaim as checkFactClaimViaApi, formatFactCheckResult, parseFactCheckInput } from "./factcheck_api.js";
 import { handleProactiveCommand } from "./proactive.js";
 import { runMakeCommand, runCreateFileCommand } from "./ollama_coding.js";
@@ -395,7 +384,7 @@ export class WhatsAppBridgeServer {
         const waLocked = isSurfaceLocked(this.settings, waScope);
         if (waLocked && !isOtpCommand(lower)) {
             const waChars = (this.characterStore && this.characterStore.characters) || [];
-            if (isProbablyControlCommand(trimmedPrompt, waChars) || detectBlogIntent(trimmedPrompt) || detectAstroIntent(trimmedPrompt)) {
+            if (isProbablyControlCommand(trimmedPrompt, waChars) || detectBlogIntent(trimmedPrompt)) {
                 return lockedMessage(this.settings, waScope);
             }
         }
@@ -578,80 +567,6 @@ export class WhatsAppBridgeServer {
             }
             const res = await playSpotifyViaApi(parsed.query, this.settings, { show: parsed.show });
             return formatSpotifyPlayResult(res);
-        }
-
-        // Astro publishing - @astro-post / @astro-build / @astro-vault /
-        // @astro-list / @astro-publish / @astro-status / @astro-path + natural
-        // "write a post about ... on astro" callouts. Before the mention gate
-        // so @astro-post works in groups too, like @blog.
-        {
-            const astroParsed = parseAstroInput(cmdText);
-            if (astroParsed) {
-                if (astroParsed.action === "path") {
-                    if (!astroParsed.path) {
-                        const st = getAstroStatus(this.settings);
-                        return `📁 Astro project path: "${st.project}" (${st.configured ? `${st.posts} post(s)` : "missing — set with @astro-path <dir>"})`;
-                    }
-                    this.settings.astro_project_path = astroParsed.path;
-                    try { saveSettings(this.settings); } catch {}
-                    return `📁 Astro project path saved: "${astroParsed.path}"`;
-                }
-                if (astroParsed.action === "status") {
-                    return formatAstroResult({ success: true, action: "status", status: getAstroStatus(this.settings) });
-                }
-                if (astroParsed.action === "list") {
-                    const res = listAstroPosts(this.settings, { limit: astroParsed.limit });
-                    return formatAstroResult({ success: res.success, action: "list", files: res.files, error: res.error });
-                }
-                if (astroParsed.action === "build") {
-                    return formatAstroResult(await buildAstroSiteViaApi(this.settings, {}));
-                }
-                if (astroParsed.action === "vault") {
-                    return formatAstroResult(syncAstroVault(this.settings, {}));
-                }
-                if (astroParsed.action === "publish") {
-                    return formatAstroResult(await publishAstroToGit(this.settings, { message: astroParsed.message }, null));
-                }
-                if (astroParsed.action === "post") {
-                    if (!astroParsed.topic) {
-                        return "⚠️ Usage: @astro-post <topic> [--lang lt|en] [--template daily|generic] [--no-push]";
-                    }
-                    const mentionedForAstro = findMentionedCharacters(trimmedPrompt, (this.characterStore && this.characterStore.characters) || []);
-                    const voiceCharForAstro = mentionedForAstro[0] || activeChar;
-                    const res = await publishAstroPostViaApi(astroParsed.topic, this.settings, {
-                        title: astroParsed.title,
-                        lang: astroParsed.lang,
-                        template: astroParsed.template,
-                        date: astroParsed.date,
-                        slug: astroParsed.slug,
-                        description: astroParsed.description,
-                        message: astroParsed.message || `astro: ${astroParsed.topic}`.slice(0, 200),
-                        dryRun: astroParsed.dryRun,
-                        build: astroParsed.build,
-                        push: astroParsed.push,
-                        vault: astroParsed.vault,
-                        settings: this.settings,
-                        ollamaClient: ollama || null,
-                        characterPersona: composeSystemTemplate(voiceCharForAstro),
-                        characterName: voiceCharForAstro.name,
-                    });
-                    return formatAstroResult(res);
-                }
-            }
-            const astroIntent = detectAstroIntent(trimmedPrompt);
-            if (astroIntent) {
-                const mentionedForIntent = trimmedPrompt.includes("@")
-                    ? findMentionedCharacters(trimmedPrompt, (this.characterStore && this.characterStore.characters) || [])
-                    : [];
-                const voiceCharForIntent = mentionedForIntent[0] || activeChar;
-                const res = await publishAstroPostViaApi(astroIntent.topic, this.settings, {
-                    settings: this.settings,
-                    ollamaClient: ollama || null,
-                    characterPersona: composeSystemTemplate(voiceCharForIntent),
-                    characterName: voiceCharForIntent.name,
-                });
-                return formatAstroResult(res);
-            }
         }
 
         // Blog drafts - @blog / @wordpress / @blogger / @post (API-first,

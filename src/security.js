@@ -2,7 +2,7 @@
 // Security PIN — protects control commands from unwanted settings changes.
 //
 // When a PIN is set (via @set-security-pin), every control command (any
-// "@..." / "/..." command plus natural blog/Astro side-effect intents)
+// "@..." / "/..." command plus natural blog side-effect intents)
 // requires an unlock first (@unlock <pin>). Regular chatting — including
 // "@Name" persona mentions — always works without the PIN.
 //
@@ -301,10 +301,9 @@ const CONTROL_WORDS = new Set([
     "voice-server", "dagowan", "live-web", "web-search", "websearch", "search-web",
     "web-fetch", "webfetch", "web-open", "web-status", "websearch-status",
     "search-status", "clear",
-    // playback / blog / astro / fact-check
+    // playback / blog / fact-check
     "youtube-play", "play", "spotify-play", "spotify", "blogger-auth",
-    "astro-post", "astro-build", "astro-vault", "astro-sync", "astro-list",
-    "astro-publish", "astro-status", "astro-path", "astro", "blog",
+    "blog",
     "blogpost", "post", "wordpress", "wp", "blogger", "blogspot",
     "fact-check", "factcheck", "fact_check", "check-fact", "verify",
     // needle / browser / cast / mcp / simulation / agentic
@@ -323,7 +322,7 @@ const CONTROL_WORDS = new Set([
 
 const CONTROL_PREFIXES = [
     "move-task-", "delete-task-", "simulation-", "blog-",
-    "cast-", "astro-", "mcp-", "needle-", "opencode-", "proactive-",
+    "cast-", "mcp-", "needle-", "opencode-", "proactive-",
 ];
 
 export function isControlWord(text) {

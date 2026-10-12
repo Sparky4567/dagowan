@@ -55,19 +55,6 @@ services:
       CAST_PORT: "${CAST_PORT:-}"
       CAST_TRANSCODE: "${CAST_TRANSCODE:-}"
       CAST_MAX_HEIGHT: "${CAST_MAX_HEIGHT:-}"
-      # Astro publishing (@astro-post): point at the Astro checkout. This
-      # stack uses named volumes only, so there is no checkout inside by
-      # default — either bind-mount one via the Portainer UI
-      # (host path -> container path, e.g. /astro) and set
-      # ASTRO_PROJECT_PATH to match, or leave empty and configure
-      # @astro-path in-app. The image already ships git/node/npm, so
-      # write + build + push work once the checkout (with node_modules
-      # installed) is mounted. Git push additionally needs credentials
-      # in that checkout.
-      ASTRO_PROJECT_PATH: "${ASTRO_PROJECT_PATH:-}"
-      ASTRO_BACKUP_DIR: "${ASTRO_BACKUP_DIR:-}"
-      ASTRO_DEFAULT_LANG: "${ASTRO_DEFAULT_LANG:-}"
-      ASTRO_DEFAULT_TEMPLATE: "${ASTRO_DEFAULT_TEMPLATE:-}"
     ports:
       - "${WHATSAPP_PORT:-8765}:8765" # WhatsApp HTTP bridge (/chat, /health)
       - "${WHATSAPP_STATUS_PORT:-8766}:8766" # WhatsApp QR / pairing view (/qr)

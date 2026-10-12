@@ -68,17 +68,6 @@ import {
 } from "./browser.js";
 import { playSpotify as playSpotifyViaApi, playYoutube as playYoutubeViaApi, getPlayStatus } from "./play_api.js";
 import { detectBlogIntent, draftBlog as draftBlogViaApi, getBlogStatus } from "./blog_api.js";
-import {
-    buildAstroSite as buildAstroSiteViaApi,
-    detectAstroIntent,
-    formatAstroResult,
-    getAstroStatus,
-    listAstroPosts,
-    parseAstroInput,
-    publishAstroPost as publishAstroPostViaApi,
-    publishAstroToGit,
-    syncAstroVault,
-} from "./astro_blog.js";
 import { checkFactClaim as checkFactClaimViaApi, formatFactCheckResult, getFactCheckStatus, parseFactCheckInput } from "./factcheck_api.js";
 import {
     NEEDLE_DEFAULT_TOOLS,
@@ -289,13 +278,6 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @spotify-play <query|Spotify URL> [--no-show] (or @spotify) — API-first (SPOTIFY_CLIENT_ID/SECRET) Spotify playback with host-browser handoff; Chromium automation is the fallback
 • @blog <topic> [--on wordpress|blogger] [--title <title>] [--no-show] (or @wordpress, @blogger, @post) — API-first (WordPress REST / Blogger API v3) blog draft with host-browser handoff; Chromium editor automation is the fallback (BLOG_SOURCE=auto|api|browser, @set-setting blog_source <mode>)
 • @blogger-auth [client_secret_file] (CLI only) — Google OAuth loopback flow for the Blogger API: opens the consent screen, stores access + refresh tokens (auto-refreshed); needs http://127.0.0.1:8791/callback registered as an Authorized redirect URI first
-• @astro-post <topic> [--title <title>] [--lang lt|en] [--template daily|generic] [--date YYYY-MM-DD] [--slug <slug>] [--dry-run] [--no-build] [--no-vault] [--no-push] (or @astro) — Generate a post with the active LLM/character voice, write it to the Astro project (artefaktas-astro src/content/blog), then vault-sync + build + git push by default
-• @astro-build — Run 'npm run build' in the Astro project
-• @astro-vault (or @astro-sync) — Copy missing posts to Astro vault/ backup (movetovault.py behavior)
-• @astro-list [N] — List recent Astro posts
-• @astro-publish [--message <msg>] — git add/commit/push the Astro project (remote.sh flow)
-• @astro-status — Show Astro project path, post count, and auto flags
-• @astro-path [<dir>] — Show or change the Astro project path (saved to app_settings.json, or ASTRO_PROJECT_PATH)
 • @fact-check <claim> [--limit N] [--source auto|papers|gemini] [--model <gemini-model>] [--no-verdict] (or @factcheck, @verify) — Search Semantic Scholar for papers (title, abstract, citations, DOI/PDF) to verify a claim; anonymous access works, SEMANTIC_SCHOLAR_API_KEY raises rate limits; with GEMINI_API_KEY set a Gemini verdict is added on top (FACTCHECK_SOURCE=auto|papers|gemini)
 • @needle <request> — On-device routing via cactus-needle (8-29 MB local model): picks a local tool (remember / task / note / timer) with grammar-guaranteed args and a calibrated confidence score; empty call list means refusal. With @set-setting needle_enabled 1, confident local-action turns on any surface skip the main LLM automatically
 • @needle-extract <JSON schema> <text> — Typed field extraction without a large LLM (e.g. @needle-extract {"type":"object","properties":{"total":{"type":"number"}}} Invoice total $12)
@@ -372,7 +354,7 @@ export async function handleAtCommand({
         }
         if (isSurfaceLocked(settings, CLI_SCOPE)) {
             const chars = (context && context.characterStore && context.characterStore.characters) || [];
-            if (isProbablyControlCommand(rawInput, chars) || detectBlogIntent(rawInput) || detectAstroIntent(rawInput)) {
+            if (isProbablyControlCommand(rawInput, chars) || detectBlogIntent(rawInput)) {
                 console.log(`\n${lockedMessage(settings, CLI_SCOPE)}\n`);
                 return { handled: true };
             }
@@ -1565,9 +1547,6 @@ export async function handleAtCommand({
         const bs = getBlogStatus(context.settings);
         console.log(`📝 Blog engine: ${bs.source} (wordpress API ${bs.wordpressApi ? "configured" : "missing — Chromium fallback"}; blogger API ${bs.bloggerApi ? "configured" : "missing — Chromium fallback"})`);
         console.log("💡 Switch engine: @set-setting blog_source <auto|api|browser>");
-        const ast = getAstroStatus(context.settings);
-        console.log(`🌐 Astro publishing: ${ast.project} (${ast.configured ? `${ast.posts} post(s)` : "project missing — set with @astro-path <dir>"})`);
-        console.log("💡 Change path: @astro-path <dir> (or @set-setting astro_project_path <dir>)");
         const fs = getFactCheckStatus(context.settings);
         console.log(`🔍 Fact-check engine: ${fs.source} (papers ${fs.papersApi ? "API key set" : "anonymous access"}; gemini verdict ${fs.gemini ? `configured (${fs.geminiModel})` : "missing — papers only"})`);
         console.log("💡 Switch engine: @set-setting factcheck_source <auto|papers|gemini>");
@@ -2230,143 +2209,6 @@ export async function handleAtCommand({
             console.log(`⚠️ Blogger auth error: ${err.message || err}`);
         }
         return { handled: true };
-    }
-
-    // Astro blog publishing - @astro-post / @astro-build / @astro-vault /
-    // @astro-list / @astro-publish / @astro-status / @astro-path.
-    // Generates with the active LLM/character voice into the artefaktas-astro
-    // project on disk (src/content/blog), then vault-sync + build + git push.
-    {
-        const astroParsed = parseAstroInput(input);
-        if (astroParsed) {
-            const settings = context ? context.settings : {};
-            const voiceChar = context && context.characterStore ? getActiveCharacter(context.characterStore) : null;
-            const voicePersona = voiceChar ? composeSystemTemplate(voiceChar) : "";
-            const voiceName = voiceChar ? voiceChar.name : "";
-            const pushReply = (text) => {
-                if (context && Array.isArray(context.messages)) {
-                    context.messages.push({ role: "user", content: input });
-                    context.messages.push({ role: "assistant", content: text });
-                    if (context.activeSessionId) saveSession(context.activeSessionId, context.messages);
-                }
-            };
-            try {
-                if (astroParsed.action === "path") {
-                    if (!astroParsed.path) {
-                        const st = getAstroStatus(settings);
-                        console.log(`📁 Astro project path: "${st.project}" (${st.configured ? "configured" : "missing astro.config.mjs/package.json"})`);
-                        console.log("💡 Change it: @astro-path <dir> (or @set-setting astro_project_path <dir>)");
-                    } else {
-                        let newPath = astroParsed.path;
-                        if (newPath.startsWith("~")) newPath = path.join(os.homedir(), newPath.slice(1));
-                        const abs = path.isAbsolute(newPath) ? newPath : path.resolve(process.cwd(), newPath);
-                        if (!fs.existsSync(abs)) {
-                            console.log(`⚠️ Directory not found: ${abs}`);
-                        } else {
-                            if (context && context.settings) {
-                                context.settings.astro_project_path = abs;
-                                saveSettings(context.settings);
-                            }
-                            console.log(`📁 Astro project path saved to app_settings.json: "${abs}"`);
-                            pushReply(`📁 Astro project path set to "${abs}".`);
-                        }
-                    }
-                    return { handled: true };
-                }
-                if (astroParsed.action === "status") {
-                    const st = getAstroStatus(settings);
-                    const out = formatAstroResult({ success: true, action: "status", status: st });
-                    console.log(`${out}\n💡 Full flow: @astro-post <topic> [--lang lt|en] [--template daily|generic] [--dry-run] [--no-build] [--no-vault] [--no-push]`);
-                    return { handled: true };
-                }
-                if (astroParsed.action === "list") {
-                    const res = listAstroPosts(settings, { limit: astroParsed.limit });
-                    console.log(formatAstroResult({ success: res.success, action: "list", files: res.files, error: res.error }));
-                    return { handled: true };
-                }
-                if (astroParsed.action === "build") {
-                    console.log("🔨 Building Astro site (npm run build)...");
-                    const res = await buildAstroSiteViaApi(settings, {});
-                    console.log(formatAstroResult(res));
-                    if (res.success) pushReply("🔨 Astro build OK.");
-                    return { handled: true };
-                }
-                if (astroParsed.action === "vault") {
-                    const res = syncAstroVault(settings, {});
-                    console.log(formatAstroResult(res));
-                    if (res.success) pushReply(`📦 Astro vault sync: ${res.copied} new file(s).`);
-                    return { handled: true };
-                }
-                if (astroParsed.action === "publish") {
-                    console.log("🚀 Publishing Astro project (git add/commit/push)...");
-                    const res = await publishAstroToGit(settings, { message: astroParsed.message }, null);
-                    console.log(formatAstroResult(res));
-                    if (res.success) pushReply("🚀 Astro publish OK (git push).");
-                    return { handled: true };
-                }
-                if (astroParsed.action === "post") {
-                    if (!astroParsed.topic) {
-                        console.log("⚠️ Usage: @astro-post <topic> [--title <title>] [--lang lt|en] [--template daily|generic] [--date YYYY-MM-DD] [--dry-run] [--no-build] [--no-vault] [--no-push]");
-                        console.log("Example: @astro-post šiandienos eksperimentai su Astro --lang lt");
-                        console.log("Example: @astro-post my week in photos --lang en --template generic --no-push");
-                        return { handled: true };
-                    }
-                    console.log(`📝 Writing Astro post about "${astroParsed.topic}"${voiceName ? ` in the voice of ${voiceName}` : ""}...`);
-                    const res = await publishAstroPostViaApi(astroParsed.topic, settings, {
-                        title: astroParsed.title,
-                        lang: astroParsed.lang,
-                        template: astroParsed.template,
-                        date: astroParsed.date,
-                        slug: astroParsed.slug,
-                        description: astroParsed.description,
-                        message: astroParsed.message || `astro: ${astroParsed.topic}`.slice(0, 200),
-                        dryRun: astroParsed.dryRun,
-                        build: astroParsed.build,
-                        push: astroParsed.push,
-                        vault: astroParsed.vault,
-                        settings,
-                        ollamaClient: ollamaClient || null,
-                        characterPersona: voicePersona,
-                        characterName: voiceName,
-                    });
-                    console.log(formatAstroResult(res));
-                    if (res.success) pushReply(formatAstroResult(res));
-                    return { handled: true };
-                }
-            } catch (err) {
-                console.log(`⚠️ Astro error: ${err.message || err}`);
-                return { handled: true };
-            }
-        }
-    }
-
-    // Natural Astro callouts ("write/publish a post about ... on astro").
-    {
-        const astroIntent = detectAstroIntent(rawInput);
-        if (astroIntent) {
-            try {
-                const settings = context ? context.settings : {};
-                const voiceChar = context && context.characterStore ? getActiveCharacter(context.characterStore) : null;
-                const voicePersona = voiceChar ? composeSystemTemplate(voiceChar) : "";
-                const voiceName = voiceChar ? voiceChar.name : "";
-                console.log(`📝 Writing Astro post about "${astroIntent.topic}"${voiceName ? ` in the voice of ${voiceName}` : ""}...`);
-                const res = await publishAstroPostViaApi(astroIntent.topic, settings, {
-                    settings,
-                    ollamaClient: ollamaClient || null,
-                    characterPersona: voicePersona,
-                    characterName: voiceName,
-                });
-                console.log(formatAstroResult(res));
-                if (res.success && context && Array.isArray(context.messages)) {
-                    context.messages.push({ role: "user", content: input });
-                    context.messages.push({ role: "assistant", content: formatAstroResult(res) });
-                    if (context.activeSessionId) saveSession(context.activeSessionId, context.messages);
-                }
-            } catch (err) {
-                console.log(`⚠️ Astro error: ${err.message || err}`);
-            }
-            return { handled: true };
-        }
     }
 
     // Agentic local browser - @blog <topic> [--on wordpress|blogger] [--title ...] [--no-show]

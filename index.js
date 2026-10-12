@@ -25,7 +25,6 @@ import { formatActiveTasks, TaskReminderManager } from "./src/tasks.js";
 import { AgenticModule } from "./src/agentic.js";
 import { COMMANDS_HELP, handleAtCommand as handleSlashCommand } from "./src/commands.js";
 import { detectBlogIntent } from "./src/blog_api.js";
-import { detectAstroIntent } from "./src/astro_blog.js";
 import { TelegramBotRunner, startAllTelegramBots } from "./src/telegram.js";
 import { PersonaPollingBridge, isPersonaOnDemandEnabled } from "./src/persona_bridge.js";
 import { findMentionedCharacters } from "./src/whatsapp_mentions.js";
@@ -253,7 +252,7 @@ async function main() {
             const pl = probe.toLowerCase();
             if (!isSecurityCommand(pl) && !isOtpCommand(pl) &&
                 (isProbablyControlCommand(t, (characterStore && characterStore.characters) || []) ||
-                    detectBlogIntent(t) || detectAstroIntent(t))) {
+                    detectBlogIntent(t))) {
                 console.log(`\n${lockedMessage(settings, CLI_SCOPE)}\n`);
                 continue;
             }
@@ -268,9 +267,9 @@ async function main() {
 
         // Check @ Commands (MCP-style; leading "/" still accepted for backward compatibility).
         // Natural blog callouts ("write a blog post about ... on @blogger")
-        // and Astro callouts ("... on astro") also route here.
+        // also route here.
         let compiledPrompt = null;
-        if (userInput.startsWith("@") || userInput.startsWith("/") || detectBlogIntent(userInput) || detectAstroIntent(userInput)) {
+        if (userInput.startsWith("@") || userInput.startsWith("/") || detectBlogIntent(userInput)) {
             const cmdResult = await handleSlashCommand({
                 commandStr: userInput,
                 context,

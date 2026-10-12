@@ -56,17 +56,6 @@ import {
 } from "./browser.js";
 import { playSpotify as playSpotifyViaApi, playYoutube as playYoutubeViaApi, getPlayStatus } from "./play_api.js";
 import { detectBlogIntent, draftBlog as draftBlogViaApi } from "./blog_api.js";
-import {
-    buildAstroSite as buildAstroSiteViaApi,
-    detectAstroIntent,
-    formatAstroResult,
-    getAstroStatus,
-    listAstroPosts,
-    parseAstroInput,
-    publishAstroPost as publishAstroPostViaApi,
-    publishAstroToGit,
-    syncAstroVault,
-} from "./astro_blog.js";
 import { checkFactClaim as checkFactClaimViaApi, formatFactCheckResult, parseFactCheckInput } from "./factcheck_api.js";
 import { handleProactiveCommand } from "./proactive.js";
 import { runMakeCommand, runCreateFileCommand } from "./ollama_coding.js";
@@ -276,7 +265,7 @@ export class TelegramBotRunner {
         const tgLocked = isSurfaceLocked(this.settings, tgScope);
         if (tgLocked && !isOtpCommand(lower)) {
             const tgChars = (this.characterStore && this.characterStore.characters) || [];
-            if (isProbablyControlCommand(msgText, tgChars) || detectBlogIntent(msgText) || detectAstroIntent(msgText)) {
+            if (isProbablyControlCommand(msgText, tgChars) || detectBlogIntent(msgText)) {
                 await this.sendMessage(chatId, lockedMessage(this.settings, tgScope));
                 return;
             }
@@ -510,87 +499,6 @@ export class TelegramBotRunner {
             const res = await playSpotifyViaApi(parsed.query, this.settings, { show: parsed.show });
             await this.sendMessage(chatId, formatSpotifyPlayResult(res));
             return;
-        }
-
-        // Astro publishing - @astro-post / @astro-build / @astro-vault /
-        // @astro-list / @astro-publish / @astro-status / @astro-path + natural
-        // "write a post about ... on astro" callouts.
-        {
-            const astroParsed = parseAstroInput(cmdText);
-            if (astroParsed) {
-                if (astroParsed.action === "path") {
-                    if (!astroParsed.path) {
-                        const st = getAstroStatus(this.settings);
-                        await this.sendMessage(chatId, `📁 Astro project path: "${st.project}" (${st.configured ? `${st.posts} post(s)` : "missing — set with @astro-path <dir>"})`);
-                    } else {
-                        this.settings.astro_project_path = astroParsed.path;
-                        try { saveSettings(this.settings); } catch {}
-                        await this.sendMessage(chatId, `📁 Astro project path saved: "${astroParsed.path}"`);
-                    }
-                    return;
-                }
-                if (astroParsed.action === "status") {
-                    await this.sendMessage(chatId, formatAstroResult({ success: true, action: "status", status: getAstroStatus(this.settings) }));
-                    return;
-                }
-                if (astroParsed.action === "list") {
-                    const res = listAstroPosts(this.settings, { limit: astroParsed.limit });
-                    await this.sendMessage(chatId, formatAstroResult({ success: res.success, action: "list", files: res.files, error: res.error }));
-                    return;
-                }
-                if (astroParsed.action === "build") {
-                    await this.sendMessage(chatId, "🔨 Building Astro site...");
-                    await this.sendMessage(chatId, formatAstroResult(await buildAstroSiteViaApi(this.settings, {})));
-                    return;
-                }
-                if (astroParsed.action === "vault") {
-                    await this.sendMessage(chatId, formatAstroResult(syncAstroVault(this.settings, {})));
-                    return;
-                }
-                if (astroParsed.action === "publish") {
-                    await this.sendMessage(chatId, "🚀 Publishing Astro project...");
-                    await this.sendMessage(chatId, formatAstroResult(await publishAstroToGit(this.settings, { message: astroParsed.message }, null)));
-                    return;
-                }
-                if (astroParsed.action === "post") {
-                    if (!astroParsed.topic) {
-                        await this.sendMessage(chatId, "⚠️ Usage: @astro-post <topic> [--lang lt|en] [--template daily|generic] [--no-push]");
-                        return;
-                    }
-                    await this.sendMessage(chatId, `📝 Writing Astro post about "${astroParsed.topic}" in the voice of ${activeChar.name}...`);
-                    const res = await publishAstroPostViaApi(astroParsed.topic, this.settings, {
-                        title: astroParsed.title,
-                        lang: astroParsed.lang,
-                        template: astroParsed.template,
-                        date: astroParsed.date,
-                        slug: astroParsed.slug,
-                        description: astroParsed.description,
-                        message: astroParsed.message || `astro: ${astroParsed.topic}`.slice(0, 200),
-                        dryRun: astroParsed.dryRun,
-                        build: astroParsed.build,
-                        push: astroParsed.push,
-                        vault: astroParsed.vault,
-                        settings: this.settings,
-                        ollamaClient: ollama || null,
-                        characterPersona: composeSystemTemplate(activeChar),
-                        characterName: activeChar.name,
-                    });
-                    await this.sendMessage(chatId, formatAstroResult(res));
-                    return;
-                }
-            }
-            const astroIntent = detectAstroIntent(msgText);
-            if (astroIntent) {
-                await this.sendMessage(chatId, `📝 Writing Astro post about "${astroIntent.topic}" in the voice of ${activeChar.name}...`);
-                const res = await publishAstroPostViaApi(astroIntent.topic, this.settings, {
-                    settings: this.settings,
-                    ollamaClient: ollama || null,
-                    characterPersona: composeSystemTemplate(activeChar),
-                    characterName: activeChar.name,
-                });
-                await this.sendMessage(chatId, formatAstroResult(res));
-                return;
-            }
         }
 
         // Blog drafts - @blog / @wordpress / @blogger / @post (API-first,

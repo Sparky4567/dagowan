@@ -39,7 +39,7 @@ else
 fi
 
 # Map env -> app_settings.json without wiping user-tuned values stored in the volume.
-if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${CLAUDE_API_KEY:-}" ] || [ -n "${GROK_API_KEY:-}" ] || [ -n "${WHATSAPP_PHONE:-}" ] || [ -n "${WHATSAPP_ENABLED:-}" ] || [ -n "${WEB_ENABLED:-}" ] || [ -n "${WHATSAPP_QR_MODE:-}" ] || [ -n "${WHATSAPP_QR:-}" ] || [ -n "${TELEGRAM_TOKEN:-}" ] || [ -n "${NEEDLE_ENABLED:-}" ] || [ -n "${NEEDLE_MIN_CONFIDENCE:-}" ] || [ -n "${NEEDLE_MODEL_PATH:-}" ] || [ -n "${NEEDLE_PYTHON:-}" ] || [ -n "${NEEDLE_DAEMON_IDLE_MS:-}" ] || [ -n "${OPENCLI_ENABLED:-}" ] || [ -n "${OPENCLI_MODEL:-}" ] || [ -n "${OPENCLI_MAX_ITERATIONS:-}" ] || [ -n "${OPENCLI_ALLOWED_CHATS:-}" ] || [ -n "${CAST_DEVICE_NAME:-}" ] || [ -n "${CAST_DEVICE_HOST:-}" ] || [ -n "${CAST_DEVICE_TYPE:-}" ] || [ -n "${CAST_PORT:-}" ] || [ -n "${CAST_TRANSCODE:-}" ] || [ -n "${CAST_MAX_HEIGHT:-}" ] || [ -n "${ASTRO_PROJECT_PATH:-}" ] || [ -n "${ASTRO_BACKUP_DIR:-}" ] || [ -n "${ASTRO_DEFAULT_LANG:-}" ] || [ -n "${ASTRO_DEFAULT_TEMPLATE:-}" ]; then
+if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${CLAUDE_API_KEY:-}" ] || [ -n "${GROK_API_KEY:-}" ] || [ -n "${WHATSAPP_PHONE:-}" ] || [ -n "${WHATSAPP_ENABLED:-}" ] || [ -n "${WEB_ENABLED:-}" ] || [ -n "${WHATSAPP_QR_MODE:-}" ] || [ -n "${WHATSAPP_QR:-}" ] || [ -n "${TELEGRAM_TOKEN:-}" ] || [ -n "${NEEDLE_ENABLED:-}" ] || [ -n "${NEEDLE_MIN_CONFIDENCE:-}" ] || [ -n "${NEEDLE_MODEL_PATH:-}" ] || [ -n "${NEEDLE_PYTHON:-}" ] || [ -n "${NEEDLE_DAEMON_IDLE_MS:-}" ] || [ -n "${OPENCLI_ENABLED:-}" ] || [ -n "${OPENCLI_MODEL:-}" ] || [ -n "${OPENCLI_MAX_ITERATIONS:-}" ] || [ -n "${OPENCLI_ALLOWED_CHATS:-}" ] || [ -n "${CAST_DEVICE_NAME:-}" ] || [ -n "${CAST_DEVICE_HOST:-}" ] || [ -n "${CAST_DEVICE_TYPE:-}" ] || [ -n "${CAST_PORT:-}" ] || [ -n "${CAST_TRANSCODE:-}" ] || [ -n "${CAST_MAX_HEIGHT:-}" ]; then
   bun -e '
     const fs = require("node:fs");
     const p = "app_settings.json";
@@ -75,10 +75,6 @@ if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_K
     if (env.CAST_PORT) { const n = Number(env.CAST_PORT); if (Number.isFinite(n)) s.cast_port = n; }
     if (env.CAST_TRANSCODE) s.cast_transcode = env.CAST_TRANSCODE;
     if (env.CAST_MAX_HEIGHT) { const n = Number(env.CAST_MAX_HEIGHT); if (Number.isFinite(n)) s.cast_max_height = n; }
-    if (env.ASTRO_PROJECT_PATH) s.astro_project_path = env.ASTRO_PROJECT_PATH;
-    if (env.ASTRO_BACKUP_DIR) s.astro_backup_dir = env.ASTRO_BACKUP_DIR;
-    if (env.ASTRO_DEFAULT_LANG) s.astro_default_lang = env.ASTRO_DEFAULT_LANG;
-    if (env.ASTRO_DEFAULT_TEMPLATE) s.astro_default_template = env.ASTRO_DEFAULT_TEMPLATE;
     fs.writeFileSync(p, JSON.stringify(s, null, 2));
     console.log("[entrypoint] app_settings.json synced from environment.");
   ' 2>/dev/null || echo "[entrypoint] warning: could not sync app_settings.json from env."

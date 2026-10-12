@@ -16,10 +16,6 @@
 #   VOICE_PORT / WEB_PORT, OPENAI_API_KEY, GEMINI_API_KEY, CLAUDE_API_KEY,
 #   GROK_API_KEY, WHATSAPP_PHONE, WHATSAPP_ENABLED, WEB_ENABLED,
 #   WHATSAPP_QR_MODE (auto|qr|pairing|off), TELEGRAM_TOKEN
-#   ASTRO_HOST_PATH (host Astro checkout to mount, e.g.
-#     /home/user/github/artefaktas-astro — mounted at ASTRO_PROJECT_PATH),
-#   ASTRO_PROJECT_PATH (container path, default /astro when mounting),
-#   ASTRO_BACKUP_DIR, ASTRO_DEFAULT_LANG, ASTRO_DEFAULT_TEMPLATE
 #
 # WhatsApp is opt-in: the container starts `--web` by default and adds
 # `--whatsapp` only when WHATSAPP_ENABLED=1 or WHATSAPP_PHONE is set.
@@ -136,32 +132,10 @@ cmd_run() {
     fi
   done
 
-  # Astro publishing (@astro-post): mount a host Astro checkout into the
-  # container so the file/build/push flow has a project to work on.
-  #   ASTRO_HOST_PATH=/home/user/github/artefaktas-astro ./dockerize.sh run
-  # Container path defaults to /astro (override with ASTRO_PROJECT_PATH);
-  # the entrypoint persists it into app_settings.json.
-  ASTRO_MOUNT=""
-  if [ -n "${ASTRO_HOST_PATH:-}" ]; then
-    if [ -d "${ASTRO_HOST_PATH}" ]; then
-      ASTRO_CONTAINER_PATH="${ASTRO_PROJECT_PATH:-/astro}"
-      ASTRO_MOUNT="-v ${ASTRO_HOST_PATH}:${ASTRO_CONTAINER_PATH}"
-      ASTRO_PROJECT_PATH="${ASTRO_CONTAINER_PATH}"
-      export ASTRO_PROJECT_PATH
-    else
-      echo "[WARN] ASTRO_HOST_PATH not found: ${ASTRO_HOST_PATH} (Astro stays unmounted)" >&2
-    fi
-  fi
-
   echo "[INFO] Starting '${CONTAINER}' from ${FULL_IMAGE} ..."
   echo "[INFO] Web UI:      http://127.0.0.1:${VOICE_PORT}"
   echo "[INFO] WhatsApp QR: http://127.0.0.1:${WHATSAPP_STATUS_PORT}/qr"
   echo "[INFO] Ollama:      ${OLLAMA_HOST}"
-  if [ -n "${ASTRO_MOUNT}" ]; then
-    echo "[INFO] Astro:      ${ASTRO_HOST_PATH} -> ${ASTRO_PROJECT_PATH} (use @astro-status in-app)"
-  else
-    echo "[INFO] Astro:      not mounted (set ASTRO_HOST_PATH to enable @astro-post)"
-  fi
   echo "[INFO] CLI args:    ${CMD_ARGS}"
 
   # NOTE: host bind-mounts cover notes/pdfs/projects/backups/logs/tmp (+ any
@@ -190,10 +164,6 @@ cmd_run() {
     ${WEB_ENABLED:+-e WEB_ENABLED="$WEB_ENABLED"} \
     ${WHATSAPP_QR_MODE:+-e WHATSAPP_QR_MODE="$WHATSAPP_QR_MODE"} \
     ${TELEGRAM_TOKEN:+-e TELEGRAM_TOKEN="$TELEGRAM_TOKEN"} \
-    ${ASTRO_PROJECT_PATH:+-e ASTRO_PROJECT_PATH="$ASTRO_PROJECT_PATH"} \
-    ${ASTRO_BACKUP_DIR:+-e ASTRO_BACKUP_DIR="$ASTRO_BACKUP_DIR"} \
-    ${ASTRO_DEFAULT_LANG:+-e ASTRO_DEFAULT_LANG="$ASTRO_DEFAULT_LANG"} \
-    ${ASTRO_DEFAULT_TEMPLATE:+-e ASTRO_DEFAULT_TEMPLATE="$ASTRO_DEFAULT_TEMPLATE"} \
     -v dagowan-data:/app/data \
     -v dagowan-wa-auth:/app/whatsapp_bridge/auth \
     -v dagowan-config:/app/config-state \
@@ -204,7 +174,6 @@ cmd_run() {
     -v "$PWD/logs:/app/logs" \
     -v "$PWD/tmp:/app/tmp" \
     $JSON_MOUNTS \
-    ${ASTRO_MOUNT} \
     "${FULL_IMAGE}" $CMD_ARGS
 }
 
