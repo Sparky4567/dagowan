@@ -197,3 +197,35 @@ export function listCharacters(store) {
         description: c.description,
     }));
 }
+
+/**
+ * Case-insensitive character lookup by name or id for blog voice
+ * resolution ("@Parsly, write a blog post ..." should draft in Parsly's
+ * voice, not a generic tone). Accepts "_"/"-"/space variants and the
+ * first word of multi-word names ("@Dungeon" -> "Dungeon master").
+ * Returns the character object or null.
+ */
+export function findCharacterByName(store, name) {
+    const chars = (store && store.characters) || [];
+    const norm = (v) =>
+        String(v || "")
+            .toLowerCase()
+            .trim()
+            .replace(/[_-]+/g, " ")
+            .replace(/\s+/g, " ");
+    const want = norm(name);
+    if (!want) return null;
+    const wantFlat = want.replace(/\s+/g, "");
+    for (const c of chars) {
+        if (!c) continue;
+        for (const raw of [c.name, c.id]) {
+            const key = norm(raw);
+            if (!key) continue;
+            if (key === want) return c;
+            if (key.replace(/\s+/g, "") === wantFlat) return c;
+            const first = key.split(" ")[0];
+            if (first && first.length >= 4 && (first === want || first === wantFlat)) return c;
+        }
+    }
+    return null;
+}

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { saveSettings } from "./config.js";
+import { memoize } from "./utils/memoize.js";
 
 const TASKS_FILE = "tasks.json";
 
@@ -31,11 +32,13 @@ export const STATUS_DISPLAY_MAP = {
     f: "Finished (f)",
 };
 
-export function normalizeStatus(statusStr) {
+function normalizeStatusUncached(statusStr) {
     if (!statusStr) return "p";
     const key = String(statusStr).trim().toLowerCase();
     return STATUS_SHORT_MAP[key] || "p";
 }
+
+export const normalizeStatus = memoize(normalizeStatusUncached, { maxSize: 200 });
 
 export function loadTasks(filePath = TASKS_FILE) {
     if (!fs.existsSync(filePath)) {
@@ -177,8 +180,8 @@ export function updateTask(taskId, { text, status }, filePath = TASKS_FILE) {
     return { success: true, task: updated };
 }
 
-export function parseMoveTaskCommand(commandStr) {
-    const cmd = String(commandStr).trim();
+function parseMoveTaskCommandUncached(commandStr) {
+    const cmd = String(commandStr).trim().replace(/^@/, "/");
     const match = cmd.match(
         /^\/move-task[-_ ]?(\d+)[-_ ]?([pof]|processing|ongoing|finished|p-processing|o-ongoing|f-finished)$/i
     );
@@ -190,14 +193,17 @@ export function parseMoveTaskCommand(commandStr) {
     return null;
 }
 
-export function parseDeleteTaskCommand(commandStr) {
-    const cmd = String(commandStr).trim();
+function parseDeleteTaskCommandUncached(commandStr) {
+    const cmd = String(commandStr).trim().replace(/^@/, "/");
     const match = cmd.match(/^\/delete-task[-_ ]?(\d+)$/i);
     if (match) {
         return parseInt(match[1], 10);
     }
     return null;
 }
+
+export const parseMoveTaskCommand = memoize(parseMoveTaskCommandUncached, { maxSize: 500 });
+export const parseDeleteTaskCommand = memoize(parseDeleteTaskCommandUncached, { maxSize: 500 });
 
 export function formatActiveTasks(filePath = TASKS_FILE) {
     const active = getActiveTasks(filePath);

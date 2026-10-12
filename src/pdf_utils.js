@@ -3,11 +3,14 @@ import path from "node:path";
 import PDFDocument from "pdfkit";
 import { marked } from "marked";
 import { PDFParse } from "pdf-parse";
+import { memoize } from "./utils/memoize.js";
+import { renderManyPdfs, extractPdfInWorker } from "./utils/pdf_parallel.js";
+import { getOptimalWorkerCount } from "./utils/concurrency.js";
 
 /**
  * Parses a date filter string (e.g. "2026-07", "2026-07-15", "2026") into a Date object.
  */
-export function parseDate(dateStr, defaultEnd = false) {
+function parseDateUncached(dateStr, defaultEnd = false) {
     if (!dateStr) return null;
     const str = dateStr.trim();
     try {
@@ -35,6 +38,9 @@ export function parseDate(dateStr, defaultEnd = false) {
     }
     return null;
 }
+
+// Pure date-string parser reused across file filtering/sorting.
+export const parseDate = memoize(parseDateUncached, { maxSize: 500 });
 
 /**
  * Extracts a date from a file name or returns file modification time.
@@ -175,8 +181,9 @@ function renderMarkdownToPdfDoc(doc, markdownContent) {
 
 /**
  * Creates a single PDF file from markdown content using PDFKit stream.
+ * Exported so the worker fallback path and callers share one implementation.
  */
-function createPdfFromMarkdown(markdownContent, outputPath, title = "") {
+export function createPdfFromMarkdown(markdownContent, outputPath, title = "") {
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ margin: 40 });
         const stream = fs.createWriteStream(outputPath);
@@ -201,8 +208,13 @@ function createPdfFromMarkdown(markdownContent, outputPath, title = "") {
 
 /**
  * Converts Markdown notes to PDF in output directory using pure JavaScript (PDFKit + Marked).
+ *
+ * Individual per-note PDFs render in parallel worker_threads
+ * (`src/utils/pdf_worker.js`, bounded by CPU count); the merged batch PDF
+ * stays single-threaded since it is one PDFKit document. Set
+ * `useWorkers: false` to force the legacy sequential path.
  */
-export async function convertNotesToPdf(inputDir = "notes", outputDir = "pdfs", fromDate = "", toDate = "") {
+export async function convertNotesToPdf(inputDir = "notes", outputDir = "pdfs", fromDate = "", toDate = "", options = {}) {
     const inputPath = path.resolve(inputDir);
     const pdfDir = path.resolve(outputDir);
 
@@ -223,15 +235,36 @@ export async function convertNotesToPdf(inputDir = "notes", outputDir = "pdfs", 
     }
 
     const createdPdfs = [];
+    const { useWorkers = true, concurrency = 0, workerTimeoutMs = 60000 } = options || {};
 
     try {
-        // 1. Generate individual PDF for each markdown note
-        for (const file of mdFiles) {
+        // 1. Generate individual PDF for each markdown note (parallel workers).
+        const jobs = mdFiles.map((file) => {
             const stem = path.basename(file, ".md");
-            const content = fs.readFileSync(file, "utf8");
-            const singlePdfPath = path.join(pdfDir, `${stem}.pdf`);
-            await createPdfFromMarkdown(content, singlePdfPath, stem);
-            createdPdfs.push(singlePdfPath);
+            return {
+                file,
+                stem,
+                markdownContent: fs.readFileSync(file, "utf8"),
+                title: stem,
+                outputPath: path.join(pdfDir, `${stem}.pdf`),
+            };
+        });
+        if (useWorkers && jobs.length > 1) {
+            const workerLimit = concurrency > 0 ? concurrency : getOptimalWorkerCount(jobs.length);
+            const rendered = await renderManyPdfs(
+                jobs.map(({ markdownContent, title, outputPath }) => ({ markdownContent, title, outputPath })),
+                {
+                    concurrency: workerLimit,
+                    timeoutMs: workerTimeoutMs,
+                    onFallback: async (job) => createPdfFromMarkdown(job.markdownContent, job.outputPath, job.title),
+                }
+            );
+            createdPdfs.push(...rendered);
+        } else {
+            for (const job of jobs) {
+                await createPdfFromMarkdown(job.markdownContent, job.outputPath, job.title);
+                createdPdfs.push(job.outputPath);
+            }
         }
 
         // 2. Generate merged batch PDF
@@ -282,8 +315,10 @@ export async function convertNotesToPdf(inputDir = "notes", outputDir = "pdfs", 
 
 /**
  * Converts PDF file back to Markdown note using pure JavaScript (pdf-parse).
+ * Set `useWorkers: true` to run the CPU-bound parse in a worker_thread
+ * (falls back to in-process parsing if the worker fails).
  */
-export async function convertPdfToMd(pdfFile, outputDir = "notes") {
+export async function convertPdfToMd(pdfFile, outputDir = "notes", options = {}) {
     let pdfPath = path.resolve(pdfFile);
     const notesDir = path.resolve(outputDir);
 
@@ -301,12 +336,17 @@ export async function convertPdfToMd(pdfFile, outputDir = "notes") {
     }
 
     try {
-        const dataBuffer = fs.readFileSync(pdfPath);
-        const parser = new PDFParse(new Uint8Array(dataBuffer));
-        await parser.load();
-        const parsedResult = await parser.getText();
-
-        const text = parsedResult.text || "";
+        const { useWorkers = false, workerTimeoutMs = 60000 } = options || {};
+        let text = "";
+        if (useWorkers) {
+            try {
+                text = await extractPdfInWorker(pdfPath, { timeoutMs: workerTimeoutMs });
+            } catch {
+                text = await extractPdfTextSync(pdfPath);
+            }
+        } else {
+            text = await extractPdfTextSync(pdfPath);
+        }
         if (!text.trim()) {
             return { success: false, error: `No text could be extracted from '${path.basename(pdfPath)}'.` };
         }
@@ -339,4 +379,27 @@ export async function convertPdfToMd(pdfFile, outputDir = "notes") {
     } catch (err) {
         return { success: false, error: `JS PDF extraction error: ${err.message}` };
     }
+}
+
+async function extractPdfTextSync(pdfPath) {
+    const dataBuffer = fs.readFileSync(pdfPath);
+    const parser = new PDFParse(new Uint8Array(dataBuffer));
+    await parser.load();
+    const parsedResult = await parser.getText();
+    return parsedResult.text || "";
+}
+
+/**
+ * Batch-convert many PDFs to Markdown with bounded worker parallelism.
+ * Each file is independent, so throughput scales with CPU count.
+ */
+export async function convertPdfsToMdBatch(pdfFiles, outputDir = "notes", options = {}) {
+    const { concurrency = 0, workerTimeoutMs = 60000 } = options || {};
+    const { mapWithConcurrency } = await import("./utils/concurrency.js");
+    const list = (pdfFiles || []).filter(Boolean);
+    return mapWithConcurrency(
+        list,
+        (f) => convertPdfToMd(f, outputDir, { useWorkers: true, workerTimeoutMs }),
+        { concurrency: concurrency > 0 ? concurrency : getOptimalWorkerCount(list.length) }
+    );
 }

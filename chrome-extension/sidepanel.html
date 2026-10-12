@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dagowan Voice AI</title>
+<style>
+  * { box-sizing: border-box; font-family: system-ui, sans-serif; }
+  html, body { height: 100%; }
+  body { margin: 0; padding: 10px; background: #0a0b10; color: #f0f3ff; display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
+  h1 { font-size: 15px; margin: 0; }
+  .sub { font-size: 11px; color: #94a3b8; }
+  .row { display: flex; gap: 6px; }
+  input, select { flex: 1; min-width: 0; padding: 7px 9px; border-radius: 8px; border: 1px solid #2a3350; background: #151828; color: #f0f3ff; font-size: 12px; }
+  button { padding: 7px 10px; border-radius: 8px; border: 1px solid #2a3350; background: #1a2038; color: #f0f3ff; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  button.primary { background: linear-gradient(135deg, #00f0ff, #0072ff); color: #000; font-weight: 700; border: none; }
+  button:hover { border-color: #00f0ff; }
+  #lockBadge { font-size: 12px; padding: 6px 10px; border-radius: 16px; border: 1px solid #2a3350; background: #151828; flex: 1; text-align: center; }
+  /* Sidebar: the transcript grows to fill all remaining height. */
+  #log { flex: 1; min-height: 120px; overflow-y: auto; background: #151828; border: 1px solid #2a3350; border-radius: 10px; padding: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .msg { padding: 6px 9px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: rgba(0,240,255,.15); max-width: 90%; }
+  .msg.bot { align-self: flex-start; background: rgba(255,255,255,.06); max-width: 92%; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .hint { font-size: 10px; color: #94a3b8; }
+  details.srv { font-size: 11px; color: #94a3b8; }
+  details.srv summary { cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>🎙 Dagowan Voice AI</h1>
+  <div class="sub">Sidebar widget for <span id="srvLabel">127.0.0.1:8767</span> — chat + locks/unlocks + commands</div>
+  <div class="row">
+    <div id="lockBadge">🔓 check…</div>
+    <button id="connBtn" title="Reconnect">🔄</button>
+  </div>
+  <details class="srv">
+    <summary>Server settings</summary>
+    <div class="row" style="margin-top:6px">
+      <input id="serverInput" placeholder="ws://127.0.0.1:8767/ws" />
+      <button id="saveSrv">Save</button>
+    </div>
+  </details>
+  <div id="log"><div class="msg bot">👋 Sidebar connected to your local Dagowan Web UI. While PIN/OTP is set, run @otp-login then @unlock before control commands. Regular chat always works.</div></div>
+  <div class="row">
+    <input id="promptInput" placeholder="Type message or @command…" />
+    <button id="sendBtn" class="primary">Send</button>
+  </div>
+  <div class="grid">
+    <button data-cmd="@security-status">🔒 Status</button>
+    <button data-cmd="@otp-status">🔐 OTP status</button>
+    <button data-cmd="@help">📜 @help</button>
+    <button data-cmd="@lock">🔒 @lock</button>
+  </div>
+  <div class="row">
+    <input id="pinInput" type="password" placeholder="PIN" inputmode="numeric" />
+    <button id="unlockBtn">🔓 Unlock</button>
+  </div>
+  <div class="row">
+    <input id="otpInput" placeholder="OTP code" inputmode="numeric" />
+    <button id="otpBtn">🔐 OTP login</button>
+  </div>
+  <div class="grid">
+    <button data-cmd="@sessions">💬 Sessions</button>
+    <button data-cmd="@stats">🧠 Stats</button>
+    <button data-cmd="@models">🤖 Models</button>
+    <button data-cmd="@get-tasks">📋 Tasks</button>
+  </div>
+  <div class="hint">Right-click selected text on any page → “Ask Dagowan”. Server must run: <b>./starter.sh --web</b> (or <b>bun run web</b>). Web scope <b>web</b> is shared with the voice UI.</div>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

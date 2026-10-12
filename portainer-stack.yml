@@ -1,0 +1,117 @@
+# Dagowan — Portainer stack (named volumes only, no host bind mounts).
+#
+# Why a separate file from docker-compose.yml?
+#   Portainer stacks have no project directory on the host, so the relative
+#   bind mounts in docker-compose.yml (./notes, ./pdfs, ...) cannot work.
+#   This file uses named volumes for everything, so it deploys cleanly from
+#   the Portainer UI (paste into the web editor) or as a Repository stack.
+#
+# Deploy option A — Repository stack (builds the image inside Portainer):
+#   Stacks -> Add stack -> Repository, point at this git repo,
+#   compose path: portainer-stack.yml. Portainer builds via `build: .`.
+#
+# Deploy option B — Web-editor paste (no build context available):
+#   1. Build + push once from any machine with Docker:
+#        docker build -t ghcr.io/<user>/dagowan:latest .
+#        docker push ghcr.io/<user>/dagowan:latest
+#   2. In the pasted stack, comment out `build: .` below and set
+#        image: ghcr.io/<user>/dagowan:latest
+#
+# WhatsApp is opt-in: the container starts `--web` by default and only adds
+# `--whatsapp` when WHATSAPP_ENABLED=1 or WHATSAPP_PHONE is set.
+
+services:
+  app:
+    image: dagowan:latest
+    build: .
+    stdin_open: true # keep interactive CLI attached
+    tty: true
+    environment:
+      BIND_HOST: "0.0.0.0"
+      HOST: "0.0.0.0"
+      # Point at Ollama on the Docker host by default. If you run the
+      # bundled `ollama` service below (or a standalone Ollama stack),
+      # set OLLAMA_HOST=http://ollama:11434 instead.
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
+      WHATSAPP_PORT: "${WHATSAPP_PORT:-8765}"
+      WHATSAPP_STATUS_PORT: "${WHATSAPP_STATUS_PORT:-8766}"
+      VOICE_PORT: "${VOICE_PORT:-8767}"
+      WEB_PORT: "${WEB_PORT:-8767}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      CLAUDE_API_KEY: "${CLAUDE_API_KEY:-}"
+      GROK_API_KEY: "${GROK_API_KEY:-}"
+      # WhatsApp is disabled unless one of these is set.
+      WHATSAPP_PHONE: "${WHATSAPP_PHONE:-}"
+      WHATSAPP_ENABLED: "${WHATSAPP_ENABLED:-}"
+      WEB_ENABLED: "${WEB_ENABLED:-}"
+      # Pairing UX: auto (numeric code on Termux, QR elsewhere)
+      # | qr | pairing | off
+      WHATSAPP_QR_MODE: "${WHATSAPP_QR_MODE:-auto}"
+      TELEGRAM_TOKEN: "${TELEGRAM_TOKEN:-}"
+      CAST_DEVICE_NAME: "${CAST_DEVICE_NAME:-}"
+      CAST_DEVICE_HOST: "${CAST_DEVICE_HOST:-}"
+      CAST_DEVICE_TYPE: "${CAST_DEVICE_TYPE:-}"
+      CAST_PORT: "${CAST_PORT:-}"
+      CAST_TRANSCODE: "${CAST_TRANSCODE:-}"
+      CAST_MAX_HEIGHT: "${CAST_MAX_HEIGHT:-}"
+      # Astro publishing (@astro-post): point at the Astro checkout. This
+      # stack uses named volumes only, so there is no checkout inside by
+      # default — either bind-mount one via the Portainer UI
+      # (host path -> container path, e.g. /astro) and set
+      # ASTRO_PROJECT_PATH to match, or leave empty and configure
+      # @astro-path in-app. The image already ships git/node/npm, so
+      # write + build + push work once the checkout (with node_modules
+      # installed) is mounted. Git push additionally needs credentials
+      # in that checkout.
+      ASTRO_PROJECT_PATH: "${ASTRO_PROJECT_PATH:-}"
+      ASTRO_BACKUP_DIR: "${ASTRO_BACKUP_DIR:-}"
+      ASTRO_DEFAULT_LANG: "${ASTRO_DEFAULT_LANG:-}"
+      ASTRO_DEFAULT_TEMPLATE: "${ASTRO_DEFAULT_TEMPLATE:-}"
+    ports:
+      - "${WHATSAPP_PORT:-8765}:8765" # WhatsApp HTTP bridge (/chat, /health)
+      - "${WHATSAPP_STATUS_PORT:-8766}:8766" # WhatsApp QR / pairing view (/qr)
+      - "${VOICE_PORT:-8767}:8767" # Dagowan voice Web UI + WebSocket (/ws)
+      - "${CAST_PORT:-8901}:8901" # TV cast relay (/stream)
+    volumes:
+      - dagowan-data:/app/data # SQLite (bot.db), browser profile
+      - dagowan-wa-auth:/app/whatsapp_bridge/auth # linked WhatsApp session
+      - dagowan-config:/app/config-state # *.json state (entrypoint-synced)
+      - dagowan-notes:/app/notes
+      - dagowan-pdfs:/app/pdfs
+      - dagowan-projects:/app/projects
+      - dagowan-backups:/app/backups
+      - dagowan-logs:/app/logs
+      - dagowan-tmp:/app/tmp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--web"]
+    restart: unless-stopped
+
+  # Optional bundled Ollama. NOTE: Portainer deploys stacks without compose
+  # profiles, so this service would be skipped. To use it under Portainer,
+  # either deploy the standalone Ollama snippet from PORTAINER.md as its own
+  # stack and set OLLAMA_HOST=http://<ollama-stack-host>:11434, or delete the
+  # `profiles:` line below so it starts with the app (then set
+  # OLLAMA_HOST=http://ollama:11434). First run: pull a model once, e.g.
+  # via the ollama container console: `ollama pull llama3`.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  dagowan-data:
+  dagowan-wa-auth:
+  dagowan-config:
+  dagowan-notes:
+  dagowan-pdfs:
+  dagowan-projects:
+  dagowan-backups:
+  dagowan-logs:
+  dagowan-tmp:
+  ollama-data:

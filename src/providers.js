@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 
 import { Ollama } from "ollama";
+import { memoize } from "./utils/memoize.js";
 
 loadDotenv();
 
@@ -18,7 +19,7 @@ export const DEFAULT_MODELS = {
 /**
  * Detects provider from model string or explicit prefix (e.g. "openai:gpt-4o", "gemini-2.5-flash")
  */
-export function detectProvider(modelName) {
+function detectProviderUncached(modelName) {
     if (!modelName) return "ollama";
     const low = modelName.toLowerCase();
 
@@ -40,7 +41,7 @@ export function detectProvider(modelName) {
 /**
  * Strips provider prefix if present (e.g. "openai:gpt-4o" -> "gpt-4o")
  */
-export function normalizeModelName(modelName) {
+function normalizeModelNameUncached(modelName) {
     if (!modelName) return "llama3";
     if (modelName.includes(":")) {
         const parts = modelName.split(":");
@@ -75,11 +76,18 @@ export function getApiKey(provider, settings = {}) {
 /**
  * Masks API key for secure logging.
  */
-export function maskApiKey(key) {
+function maskApiKeyUncached(key) {
     if (!key) return "(Not set)";
     if (key.length <= 8) return "********";
     return `${key.slice(0, 4)}...${key.slice(-4)}`;
 }
+
+// Pure string helpers run on every LLM call — memoize them. Deliberately
+// NOT memoizing getApiKey/unifiedChat: keys come from env/settings and
+// chat responses must never be cached.
+export const detectProvider = memoize(detectProviderUncached, { maxSize: 200 });
+export const normalizeModelName = memoize(normalizeModelNameUncached, { maxSize: 200 });
+export const maskApiKey = memoize(maskApiKeyUncached, { maxSize: 200 });
 
 /**
  * Unified Chat Interface supporting Ollama, OpenAI (ChatGPT), Gemini, Claude, and Grok.
@@ -134,7 +142,7 @@ export async function unifiedChat({
                 throw new Error(
                     `Unable to connect to Ollama server at ${hostUrl}.\n` +
                     `👉 If using local models, ensure 'ollama serve' is running in PRoot-Distro/Termux.\n` +
-                    `👉 If using cloud models, set API key with: /set-api-key <provider> <key> (e.g. /set-api-key gemini YOUR_KEY)`
+                    `👉 If using cloud models, set API key with: @set-api-key <provider> <key> (e.g. @set-api-key gemini YOUR_KEY)`
                 );
             }
             throw err;
@@ -144,7 +152,7 @@ export async function unifiedChat({
     const apiKey = getApiKey(provider, settings);
     if (!apiKey) {
         throw new Error(
-            `Missing API Key for provider '${provider}'. Set it using /set-api-key ${provider} <key> or set environment variable.`
+            `Missing API Key for provider '${provider}'. Set it using @set-api-key ${provider} <key> or set environment variable.`
         );
     }
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dagowan Voice AI — Local Duplex Voice Bridge</title>
+    <title>Dagowan Voice AI — Full-Duplex Voice & Provider Engine</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -79,6 +79,12 @@
             -webkit-text-fill-color: transparent;
         }
 
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .status-badge {
             display: flex;
             align-items: center;
@@ -112,19 +118,21 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 32px;
+            gap: 24px;
             margin: auto;
         }
 
         /* Dagowan Interactive Voice Orb */
         .orb-wrapper {
             position: relative;
-            width: 220px;
-            height: 220px;
+            width: 200px;
+            height: 200px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .orb-glow {
@@ -140,8 +148,8 @@
 
         .orb-core {
             position: relative;
-            width: 140px;
-            height: 140px;
+            width: 130px;
+            height: 130px;
             border-radius: 50%;
             background: linear-gradient(135deg, #00f0ff 0%, #7b2cbf 50%, #ff007f 100%);
             box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(0, 240, 255, 0.5);
@@ -152,7 +160,7 @@
         }
 
         .orb-icon {
-            font-size: 48px;
+            font-size: 44px;
             filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
         }
 
@@ -190,16 +198,15 @@
             100% { transform: scale(1.25); }
         }
 
-        /* Audio Visualizer Waveform Canvas */
         canvas#visualizer {
             width: 100%;
             max-width: 400px;
-            height: 60px;
+            height: 50px;
             border-radius: 12px;
         }
 
         .state-label {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
             letter-spacing: 0.5px;
             color: var(--text-secondary);
@@ -209,7 +216,7 @@
         /* Transcript Container */
         .transcript-box {
             width: 100%;
-            height: 240px;
+            height: 220px;
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 20px;
@@ -250,12 +257,14 @@
         /* Controls */
         .controls-group {
             display: flex;
-            gap: 16px;
+            gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 30px;
             border: 1px solid var(--card-border);
             background: var(--card-bg);
@@ -267,6 +276,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .btn:hover {
@@ -287,6 +298,7 @@
             color: #fff;
             animation: pulse-dot 1s infinite;
         }
+
         .chat-input-row {
             width: 100%;
             display: flex;
@@ -311,6 +323,243 @@
             border-color: var(--accent-cyan);
             box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
         }
+
+        /* Settings Drawer Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .settings-card {
+            width: 90%;
+            max-width: 520px;
+            background: rgba(22, 26, 42, 0.95);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 240, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 12px;
+        }
+
+        .settings-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-select, .form-input {
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+            background: rgba(10, 11, 16, 0.8);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .form-select:focus, .form-input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        /* Mobile-responsive layout: phones and small tablets */
+        @media (max-width: 640px) {
+            body {
+                padding: 12px;
+            }
+
+            header {
+                padding: 12px 14px;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+
+            .logo-badge {
+                width: 32px;
+                height: 32px;
+                font-size: 16px;
+            }
+
+            .logo-title {
+                font-size: 16px;
+            }
+
+            .header-actions {
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .header-actions .btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+
+            .status-badge {
+                font-size: 11px;
+                padding: 5px 10px;
+            }
+
+            main {
+                gap: 16px;
+            }
+
+            .orb-wrapper {
+                width: 150px;
+                height: 150px;
+            }
+
+            .orb-core {
+                width: 100px;
+                height: 100px;
+            }
+
+            .orb-icon {
+                font-size: 34px;
+            }
+
+            .state-label {
+                font-size: 13px;
+                text-align: center;
+                padding: 0 8px;
+            }
+
+            canvas#visualizer {
+                max-width: 100%;
+            }
+
+            .transcript-box {
+                height: 32vh;
+                min-height: 160px;
+                padding: 14px;
+            }
+
+            .message-bubble {
+                font-size: 14px;
+                max-width: 92%;
+            }
+
+            .chat-input-row {
+                gap: 8px;
+            }
+
+            /* 16px input font prevents iOS Safari auto-zoom on focus */
+            #textInput {
+                padding: 12px 16px;
+                font-size: 16px;
+            }
+
+            #sendBtn {
+                padding: 12px 16px;
+                flex-shrink: 0;
+            }
+
+            .controls-group {
+                width: 100%;
+            }
+
+            .controls-group .btn {
+                flex: 1 1 40%;
+                justify-content: center;
+                min-height: 44px;
+                font-size: 13px;
+            }
+
+            .settings-card {
+                width: 94%;
+                padding: 20px;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+        }
+
+        /* Very small phones (<=380px): keep header + input on screen */
+        @media (max-width: 380px) {
+            body {
+                padding: 8px;
+            }
+
+            header {
+                border-radius: 16px;
+            }
+
+            .logo-title {
+                font-size: 14px;
+            }
+
+            .header-actions {
+                width: 100%;
+            }
+
+            .header-actions .btn,
+            .status-badge {
+                flex: 1 1 auto;
+                justify-content: center;
+            }
+
+            .orb-wrapper {
+                width: 128px;
+                height: 128px;
+            }
+
+            .orb-core {
+                width: 88px;
+                height: 88px;
+            }
+
+            .orb-icon {
+                font-size: 30px;
+            }
+
+            #sendBtn {
+                font-size: 13px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -319,12 +568,21 @@
             <div class="logo-badge">🎙</div>
             <div>
                 <div class="logo-title">Dagowan Voice AI</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">Local Full-Duplex Socket Bridge</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">Full-Duplex Speech & Provider Engine</div>
             </div>
         </div>
-        <div class="status-badge">
-            <div class="status-dot"></div>
-            <span id="connStatus">Connected (ws://127.0.0.1:8767/ws)</span>
+        <div class="header-actions">
+            <button class="btn" id="openSecurityBtn">🔒 Security</button>
+            <button class="btn" id="openCommandsBtn">📜 Commands</button>
+            <button class="btn" id="openSettingsBtn">⚙️ Engine Settings</button>
+            <div class="status-badge" id="lockBadge" title="PIN/OTP lock state (from @security-status / @otp-status)">
+                <div class="status-dot" id="lockDot"></div>
+                <span id="lockStatus">🔓 check…</span>
+            </div>
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span id="connStatus">Connecting...</span>
+            </div>
         </div>
     </header>
 
@@ -344,7 +602,7 @@
         <!-- Live Conversation Transcript -->
         <div class="transcript-box" id="transcriptBox">
             <div class="message-bubble assistant">
-                👋 Hello! I am your local voice assistant. Tap the glowing orb, hold the mic button, or type a text message below.
+                👋 Hello! I am your AI Voice Companion. You can chat using local ONNX speech, browser Web Speech API, or OpenAI API services. Tap the glowing orb to speak!
             </div>
         </div>
 
@@ -357,19 +615,165 @@
         <div class="controls-group">
             <button class="btn primary" id="micBtn">🎙 Hold to Speak</button>
             <button class="btn" id="duplexToggle">🔄 Continuous Voice: OFF</button>
+            <button class="btn" id="stopSpeechBtn">⏸ Intercept Speech</button>
+            <button class="btn" id="secStatusBtn">🔒 Status</button>
+            <button class="btn" id="cmdHelpBtn">📜 @help</button>
             <button class="btn" id="clearBtn">🧹 Clear Transcript</button>
         </div>
     </main>
+
+    <!-- Security PIN + OTP Modal (locks/unlocks supported by the Web bridge) -->
+    <div class="modal-overlay" id="securityModal">
+        <div class="settings-card">
+            <div class="settings-header">
+                <div class="settings-title">🔒 Security PIN + 🔐 OTP 2FA</div>
+                <button class="close-btn" id="closeSecurityBtn">✖</button>
+            </div>
+            <div style="font-size: 13px; color: var(--text-secondary);">Web scope is <b>web</b> (shared for this UI). While a PIN or OTP is set, every @ control command — including @help — needs <b>@otp-login</b> first, then <b>@unlock</b>. Regular chat always works.</div>
+            <div class="form-group">
+                <label class="form-label">Quick status</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn" id="secCheckBtn">🔒 @security-status</button>
+                    <button class="btn" id="otpCheckBtn">🔐 @otp-status</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Unlock / lock PIN layer</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="password" class="form-input" id="pinInput" placeholder="6+ digit PIN" inputmode="numeric" style="flex: 1;" />
+                    <button class="btn primary" id="unlockBtn">🔓 Unlock</button>
+                    <button class="btn" id="lockBtn">🔒 Lock</button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                    <input type="password" class="form-input" id="newPinInput" placeholder="new PIN (to set/change)" inputmode="numeric" style="flex: 1; min-width: 160px;" />
+                    <button class="btn" id="setPinBtn">➕ Set PIN</button>
+                    <button class="btn" id="removePinBtn">🗑 Remove PIN</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">OTP second factor (Google Authenticator / Authy / 1Password)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="form-input" id="otpInput" placeholder="6-digit code" inputmode="numeric" style="flex: 1;" />
+                    <button class="btn primary" id="otpLoginBtn">🔐 OTP login</button>
+                    <button class="btn" id="otpLockBtn">OTP lock</button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                    <button class="btn" id="otpSetBtn">➕ @otp-set</button>
+                    <button class="btn" id="otpRemoveBtn">🗑 @otp-remove</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Unlock duration (minutes, 1–1440)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="number" class="form-input" id="unlockMinutesInput" min="1" max="1440" placeholder="10" style="flex: 1;" />
+                    <button class="btn" id="unlockMinutesBtn">💾 Save</button>
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary);">Needs unlock first. Sent as @set-setting security_unlock_minutes N.</div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px;">
+                <button class="btn" id="cancelSecurityBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supported commands modal (mirrors @help / COMMANDS_HELP) -->
+    <div class="modal-overlay" id="commandsModal">
+        <div class="settings-card" style="max-width: 640px;">
+            <div class="settings-header">
+                <div class="settings-title">📜 Supported @ commands</div>
+                <button class="close-btn" id="closeCommandsBtn">✖</button>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" class="form-input" id="cmdSearchInput" placeholder="Filter commands… (e.g. otp, astro, opencode)" style="flex: 1;" />
+                <button class="btn primary" id="cmdHelpSendBtn">@help</button>
+            </div>
+            <div id="cmdList" style="display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; margin-top: 6px;"></div>
+            <div style="font-size: 11px; color: var(--text-secondary);">Tip: locked surfaces must @otp-login (+ @unlock) before @help answers. Click ▶ to send a command to the chat box.</div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn" id="cancelCommandsBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice & Provider Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="settings-card">
+            <div class="settings-header">
+                <div class="settings-title">⚙️ Voice AI Engine Settings</div>
+                <button class="close-btn" id="closeSettingsBtn">✖</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Speech-to-Text (STT) Engine</label>
+                <select class="form-select" id="sttEngineSelect">
+                    <option value="local">Local Whisper (ONNX / WASM — $0.00)</option>
+                    <option value="browser">Browser Native Web Speech API (Chrome/Android — $0.00)</option>
+                    <option value="openai">OpenAI Whisper API (whisper-1 — Credit Balance)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Text-to-Speech (TTS) Engine</label>
+                <select class="form-select" id="ttsEngineSelect">
+                    <option value="local">Local MMS-TTS (ONNX — $0.00)</option>
+                    <option value="browser">Browser Native SpeechSynthesis (Client — $0.00)</option>
+                    <option value="openai">OpenAI Text-to-Speech API (tts-1 — Credit Balance)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label">OpenAI API Key (Credit-Based Account)</label>
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan); font-size: 12px; text-decoration: underline; font-weight: 500;">🔑 Get OpenAI API Key ↗</a>
+                </div>
+                <input type="password" class="form-input" id="openaiKeyInput" placeholder="sk-proj-..." />
+                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+                    Create service token at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan);">platform.openai.com/api-keys</a>. Add credits at <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan);">Billing Overview ↗</a>.
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">OpenAI TTS Voice Persona</label>
+                <select class="form-select" id="openaiVoiceSelect">
+                    <option value="alloy">Alloy (Neutral & Clear)</option>
+                    <option value="echo">Echo (Warm Male)</option>
+                    <option value="fable">Fable (British Expressive)</option>
+                    <option value="onyx">Onyx (Deep Male)</option>
+                    <option value="nova">Nova (Energetic Female)</option>
+                    <option value="shimmer">Shimmer (Smooth Female)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Unlock duration — security_unlock_minutes (1–1440)</label>
+                <input type="number" class="form-input" id="unlockMinutesSetting" min="1" max="1440" placeholder="10" />
+                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">PIN + OTP auth on this surface expire together after this TTL. Refused while locked (use the 🔒 Security panel instead).</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                <button class="btn" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn primary" id="saveSettingsBtn">💾 Save Settings</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const wsUrl = `ws://${window.location.host}/ws`;
         let socket = null;
         let mediaRecorder = null;
+        let mediaStream = null;
         let audioChunks = [];
         let isRecording = false;
         let isDuplexMode = false;
         let audioCtx = null;
-        let analyser = null;
+        let activeAudioSource = null;
+        let activeRecognition = null;
+        let currentSettings = {};
+        // Invalidated whenever playback is stopped: a browser-TTS utterance
+        // scheduled just before an interrupt must never speak afterwards.
+        let speakToken = 0;
+
+        const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         const orbWrapper = document.getElementById("orbWrapper");
         const orbIcon = document.getElementById("orbIcon");
@@ -379,20 +783,44 @@
         const micBtn = document.getElementById("micBtn");
         const duplexToggle = document.getElementById("duplexToggle");
         const clearBtn = document.getElementById("clearBtn");
-        const canvas = document.getElementById("visualizer");
-        const canvasCtx = canvas.getContext("2d");
+        const stopSpeechBtn = document.getElementById("stopSpeechBtn");
+        const textInput = document.getElementById("textInput");
+        const sendBtn = document.getElementById("sendBtn");
+
+        // Modal Elements
+        const openSettingsBtn = document.getElementById("openSettingsBtn");
+        const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+        const cancelSettingsBtn = document.getElementById("cancelSettingsBtn");
+        const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+        const settingsModal = document.getElementById("settingsModal");
+        const sttEngineSelect = document.getElementById("sttEngineSelect");
+        const ttsEngineSelect = document.getElementById("ttsEngineSelect");
+        const openaiKeyInput = document.getElementById("openaiKeyInput");
+        const openaiVoiceSelect = document.getElementById("openaiVoiceSelect");
+        const unlockMinutesSetting = document.getElementById("unlockMinutesSetting");
+        const lockStatus = document.getElementById("lockStatus");
+        const lockBadge = document.getElementById("lockBadge");
 
         function connectWebSocket() {
             socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {
-                connStatus.innerText = "Connected to Local Voice Socket";
+                connStatus.innerText = "Connected to Voice Socket";
                 console.log("WebSocket connected!");
+                // Proactively surface PIN/OTP lock state on the shared "web" scope.
+                try {
+                    socket.send(JSON.stringify({ event: "text_prompt", text: "@security-status" }));
+                    socket.send(JSON.stringify({ event: "text_prompt", text: "@otp-status" }));
+                } catch (_) {}
             };
 
             socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleServerEvent(data);
+                try {
+                    const data = JSON.parse(event.data);
+                    handleServerEvent(data);
+                } catch (err) {
+                    console.error("WS parse error:", err);
+                }
             };
 
             socket.onclose = () => {
@@ -407,13 +835,19 @@
                 stateLabel.innerText = "Listening...";
                 orbIcon.innerText = "🗣";
             } else if (state === "transcribing") {
-                stateLabel.innerText = "Transcribing Local Voice...";
+                const engine = currentSettings.stt_engine || "local";
+                if (engine === "openai") stateLabel.innerText = "Transcribing via OpenAI Whisper API...";
+                else if (engine === "browser") stateLabel.innerText = "Transcribing via Browser Web Speech API...";
+                else stateLabel.innerText = "Transcribing Local Voice...";
                 orbIcon.innerText = "⚡";
             } else if (state === "thinking") {
                 stateLabel.innerText = "Thinking...";
                 orbIcon.innerText = "🧠";
             } else if (state === "speaking") {
-                stateLabel.innerText = "Speaking (Local MMS-TTS)...";
+                const engine = currentSettings.tts_engine || "local";
+                if (engine === "openai") stateLabel.innerText = `Speaking (OpenAI TTS - ${currentSettings.openai_tts_voice || 'alloy'})...`;
+                else if (engine === "browser") stateLabel.innerText = "Speaking (Browser SpeechSynthesis)...";
+                else stateLabel.innerText = "Speaking (Local MMS-TTS)...";
                 orbIcon.innerText = "🔊";
             } else {
                 stateLabel.innerText = isDuplexMode ? "Continuous Mode Active — Speak Any Time" : "Tap Orb to Speak";
@@ -429,21 +863,103 @@
             transcriptBox.scrollTop = transcriptBox.scrollHeight;
         }
 
+        function stripMarkdown(text) {
+            if (!text) return "";
+            return text
+                .replace(/\*\*([^*]+)\*\*/g, "$1")
+                .replace(/\*([^*]+)\*/g, "$1")
+                .replace(/#+\s+/g, "")
+                .replace(/`([^`]+)`/g, "$1")
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+                .replace(/^[-*+]\s+/gm, "")
+                .trim();
+        }
+
+        function stopAudioPlayback(notifyServer = true) {
+            speakToken++; // invalidate any browser-TTS speak scheduled below
+            if (activeAudioSource) {
+                try {
+                    activeAudioSource.stop();
+                    activeAudioSource.disconnect();
+                } catch (_) {}
+                activeAudioSource = null;
+            }
+            if (window.speechSynthesis) {
+                try { window.speechSynthesis.cancel(); } catch (_) {}
+            }
+            if (activeRecognition) {
+                try {
+                    activeRecognition.onresult = null;
+                    activeRecognition.onend = null;
+                    activeRecognition.onerror = null;
+                    activeRecognition.abort();
+                } catch (_) {}
+                activeRecognition = null;
+            }
+            if (notifyServer && socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ event: "interrupt" }));
+            }
+            setOrbState("idle");
+        }
+
         function handleServerEvent(data) {
-            if (data.event === "state_change") {
+            if (data.event === "connected" || data.event === "settings_updated") {
+                if (data.settings) {
+                    currentSettings = data.settings;
+                    sttEngineSelect.value = currentSettings.stt_engine || "local";
+                    ttsEngineSelect.value = currentSettings.tts_engine || "local";
+                    openaiKeyInput.value = currentSettings.openai_api_key || "";
+                    openaiVoiceSelect.value = currentSettings.openai_tts_voice || "alloy";
+                    if (unlockMinutesSetting && currentSettings.security_unlock_minutes !== undefined) {
+                        unlockMinutesSetting.value = currentSettings.security_unlock_minutes;
+                    }
+                    try { if (typeof renderCommands === "function" && document.getElementById("cmdList")) renderCommands((document.getElementById("cmdSearchInput") || {}).value || ""); } catch {}
+                }
+            } else if (data.event === "state_change") {
                 setOrbState(data.state);
             } else if (data.event === "stt_transcript") {
                 appendMessage("user", data.text);
                 setOrbState("thinking");
             } else if (data.event === "llm_complete") {
                 appendMessage("assistant", data.text);
+                updateLockBadge(data.text);
+                if (currentSettings.tts_engine === "browser" && window.speechSynthesis) {
+                    // Chrome drops speak() issued in the same task as cancel():
+                    // the utterance sticks in `pending` forever with no
+                    // callbacks. A short delay lets the cancelled queue clear.
+                    const myToken = ++speakToken;
+                    const replyText = data.text;
+                    setTimeout(() => {
+                        if (myToken !== speakToken) return; // interrupted meanwhile
+                        try {
+                            window.speechSynthesis.cancel();
+                            if (window.speechSynthesis.resume) window.speechSynthesis.resume();
+                            const spokenText = stripMarkdown(replyText);
+                            const utterance = new SpeechSynthesisUtterance(spokenText);
+                            utterance.onstart = () => setOrbState("speaking");
+                            utterance.onend = () => {
+                                setOrbState("idle");
+                                if (isDuplexMode) startRecording();
+                            };
+                            utterance.onerror = (err) => {
+                                if (err.error === "interrupted" || err.error === "canceled") {
+                                    return; // Normal cancellation when user sends a new prompt or interrupts
+                                }
+                                console.error("SpeechSynthesis utterance error:", err);
+                                setOrbState("idle");
+                            };
+                            window.speechSynthesis.speak(utterance);
+                        } catch (synthErr) {
+                            console.error("SpeechSynthesis error:", synthErr);
+                            setOrbState("idle");
+                        }
+                    }, 150);
+                }
             } else if (data.event === "tts_audio") {
                 setOrbState("speaking");
                 playAudioBuffer(data.audio);
             }
         }
-
-        let mediaStream = null;
 
         function getSupportedAudioMimeType() {
             const types = [
@@ -460,6 +976,7 @@
         }
 
         async function playAudioBuffer(base64Wav) {
+            stopAudioPlayback(false); // Stop existing audio without notifying server interrupt
             try {
                 const binary = atob(base64Wav);
                 const bytes = new Uint8Array(binary.length);
@@ -473,19 +990,103 @@
                 const source = audioCtx.createBufferSource();
                 source.buffer = decoded;
                 source.connect(audioCtx.destination);
+                activeAudioSource = source;
+                
                 source.onended = () => {
+                    activeAudioSource = null;
                     setOrbState("idle");
                     if (isDuplexMode) startRecording();
                 };
                 source.start(0);
             } catch (playErr) {
                 console.error("Audio playback error:", playErr);
+                activeAudioSource = null;
                 setOrbState("idle");
             }
         }
 
         async function startRecording() {
             if (isRecording) return;
+            stopAudioPlayback(true); // Interrupt TTS playback if user speaks or taps mic!
+
+            // 1. Browser Native Web Speech API STT Option
+            if (currentSettings.stt_engine === "browser" && SpeechRecognitionClass) {
+                try {
+                    if (activeRecognition) {
+                        try {
+                            activeRecognition.onresult = null;
+                            activeRecognition.onend = null;
+                            activeRecognition.onerror = null;
+                            activeRecognition.abort();
+                        } catch (_) {}
+                    }
+                    activeRecognition = new SpeechRecognitionClass();
+                    activeRecognition.continuous = false;
+                    activeRecognition.interimResults = true;
+                    activeRecognition.lang = "en-US";
+
+                    let interimText = "";
+                    let finalResultText = "";
+
+                    activeRecognition.onresult = (event) => {
+                        let interim = "";
+                        for (let i = event.resultIndex; i < event.results.length; ++i) {
+                            if (event.results[i].isFinal) {
+                                finalResultText += event.results[i][0].transcript;
+                            } else {
+                                interim += event.results[i][0].transcript;
+                            }
+                        }
+                        const currentText = (finalResultText || interim).trim();
+                        if (currentText) {
+                            stateLabel.innerText = `Recognizing: "${currentText}"`;
+                        }
+                    };
+
+                    activeRecognition.onerror = (event) => {
+                        console.warn("Browser SpeechRecognition notice:", event.error);
+                        if (event.error !== "no-speech" && event.error !== "aborted") {
+                            stateLabel.innerText = "Browser STT Notice: " + event.error;
+                        }
+                        isRecording = false;
+                        activeRecognition = null;
+                        micBtn.classList.remove("recording");
+                        micBtn.innerText = "🎙 Hold to Speak";
+                    };
+
+                    activeRecognition.onend = () => {
+                        isRecording = false;
+                        const recInstance = activeRecognition;
+                        activeRecognition = null;
+                        micBtn.classList.remove("recording");
+                        micBtn.innerText = "🎙 Hold to Speak";
+
+                        const recognized = finalResultText.trim();
+                        if (recognized) {
+                            appendMessage("user", recognized);
+                            setOrbState("thinking");
+                            if (socket && socket.readyState === WebSocket.OPEN) {
+                                socket.send(JSON.stringify({ event: "text_prompt", text: recognized }));
+                            }
+                        } else {
+                            setOrbState("idle");
+                        }
+                    };
+
+                    activeRecognition.start();
+                    isRecording = true;
+                    setOrbState("listening");
+                    micBtn.classList.add("recording");
+                    micBtn.innerText = "🛑 Stop & Send";
+                    return;
+                } catch (recErr) {
+                    console.error("Failed to start browser SpeechRecognition:", recErr);
+                    activeRecognition = null;
+                    stateLabel.innerText = "Browser STT unavailable. Falling back to audio recording...";
+                }
+            }
+
+            // 2. Server Audio Recording STT (Local ONNX or OpenAI API)
             try {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === "suspended") {
@@ -505,7 +1106,9 @@
 
                 mediaRecorder.onstop = async () => {
                     if (mediaStream) {
-                        mediaStream.getTracks().forEach((track) => track.stop());
+                        try {
+                            mediaStream.getTracks().forEach((track) => track.stop());
+                        } catch (_) {}
                         mediaStream = null;
                     }
 
@@ -514,20 +1117,31 @@
                         return;
                     }
 
-                    const recordMime = mediaRecorder.mimeType || mimeType || "audio/webm";
-                    const blob = new Blob(audioChunks, { type: recordMime });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(blob);
-                    reader.onloadend = () => {
-                        const result = reader.result || "";
-                        const base64 = result.includes(",") ? result.split(",")[1] : result;
-                        if (socket && socket.readyState === WebSocket.OPEN && base64) {
-                            setOrbState("transcribing");
-                            socket.send(JSON.stringify({ event: "audio_data", audio: base64, mimeType: recordMime }));
-                        } else {
-                            setOrbState("idle");
-                        }
-                    };
+                    try {
+                        const recordMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+                        const blob = new Blob(audioChunks, { type: recordMime });
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            try {
+                                const result = reader.result || "";
+                                const base64 = result.includes(",") ? result.split(",")[1] : result;
+                                if (socket && socket.readyState === WebSocket.OPEN && base64) {
+                                    setOrbState("transcribing");
+                                    socket.send(JSON.stringify({ event: "audio_data", audio: base64, mimeType: recordMime }));
+                                } else {
+                                    setOrbState("idle");
+                                }
+                            } catch (readErr) {
+                                console.error("FileReader read error:", readErr);
+                                setOrbState("idle");
+                            }
+                        };
+                        reader.onerror = () => setOrbState("idle");
+                        reader.readAsDataURL(blob);
+                    } catch (blobErr) {
+                        console.error("Blob processing error:", blobErr);
+                        setOrbState("idle");
+                    }
                 };
 
                 mediaRecorder.start(100);
@@ -542,31 +1156,73 @@
         }
 
         function stopRecording() {
-            if (!isRecording || !mediaRecorder) return;
-            try {
-                if (mediaRecorder.state !== "inactive") {
-                    try {
-                        mediaRecorder.requestData();
-                    } catch (_) {}
-                    mediaRecorder.stop();
+            if (!isRecording) return;
+            if (activeRecognition) {
+                try { activeRecognition.stop(); } catch (_) {}
+            }
+            if (mediaRecorder) {
+                try {
+                    if (mediaRecorder.state !== "inactive") {
+                        try { mediaRecorder.requestData(); } catch (_) {}
+                        mediaRecorder.stop();
+                    }
+                } catch (err) {
+                    console.error("Stop recording error:", err);
                 }
-            } catch (err) {
-                console.error("Stop recording error:", err);
             }
             isRecording = false;
             micBtn.classList.remove("recording");
             micBtn.innerText = "🎙 Hold to Speak";
         }
 
-        orbWrapper.addEventListener("click", () => {
-            if (isRecording) stopRecording();
-            else startRecording();
-        });
+        function attachHoldAndClickEvents(element) {
+            let pressTimer = null;
+            let isHoldMode = false;
 
-        micBtn.addEventListener("click", () => {
-            if (isRecording) stopRecording();
-            else startRecording();
-        });
+            const handlePressStart = (e) => {
+                if (e.type === "touchstart") e.preventDefault();
+                
+                // If already recording, a press/click stops recording and sends
+                if (isRecording) {
+                    stopRecording();
+                    isHoldMode = false;
+                    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+                    return;
+                }
+
+                // Start recording
+                startRecording();
+
+                // If held down for longer than 250ms, activate Push-To-Talk hold mode
+                pressTimer = setTimeout(() => {
+                    isHoldMode = true;
+                }, 250);
+            };
+
+            const handlePressEnd = (e) => {
+                if (pressTimer) {
+                    clearTimeout(pressTimer);
+                    pressTimer = null;
+                }
+
+                // If in hold mode and user releases mouse/touch, stop recording & send
+                if (isHoldMode && isRecording) {
+                    stopRecording();
+                    isHoldMode = false;
+                }
+            };
+
+            element.addEventListener("mousedown", handlePressStart);
+            element.addEventListener("mouseup", handlePressEnd);
+            element.addEventListener("mouseleave", handlePressEnd);
+
+            element.addEventListener("touchstart", handlePressStart, { passive: false });
+            element.addEventListener("touchend", handlePressEnd);
+            element.addEventListener("touchcancel", handlePressEnd);
+        }
+
+        attachHoldAndClickEvents(orbWrapper);
+        attachHoldAndClickEvents(micBtn);
 
         duplexToggle.addEventListener("click", () => {
             isDuplexMode = !isDuplexMode;
@@ -574,12 +1230,19 @@
             duplexToggle.classList.toggle("primary", isDuplexMode);
         });
 
-        const textInput = document.getElementById("textInput");
-        const sendBtn = document.getElementById("sendBtn");
+        stopSpeechBtn.addEventListener("click", () => {
+            stopAudioPlayback(true);
+        });
 
         function sendTextMessage() {
             const text = textInput.value.trim();
             if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+            
+            if (isRecording) {
+                stopRecording();
+            }
+            
+            stopAudioPlayback(true); // Halts pending audio playback and sends interrupt to server
             socket.send(JSON.stringify({ event: "text_prompt", text: text }));
             textInput.value = "";
         }
@@ -593,6 +1256,218 @@
             transcriptBox.innerHTML = "";
             appendMessage("assistant", "Transcript cleared.");
         });
+
+        // Settings Modal Handlers
+        openSettingsBtn.addEventListener("click", () => {
+            settingsModal.classList.add("active");
+        });
+
+        const hideModal = () => settingsModal.classList.remove("active");
+        closeSettingsBtn.addEventListener("click", hideModal);
+        cancelSettingsBtn.addEventListener("click", hideModal);
+
+        saveSettingsBtn.addEventListener("click", () => {
+            const newSettings = {
+                stt_engine: sttEngineSelect.value,
+                tts_engine: ttsEngineSelect.value,
+                openai_api_key: openaiKeyInput.value.trim(),
+                openai_tts_voice: openaiVoiceSelect.value,
+            };
+            const mins = parseInt((unlockMinutesSetting && unlockMinutesSetting.value) || "", 10);
+            if (Number.isFinite(mins)) newSettings.security_unlock_minutes = Math.min(Math.max(mins, 1), 1440);
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ event: "update_settings", settings: newSettings }));
+            }
+            hideModal();
+        });
+
+        // ---- Security (PIN + OTP locks/unlocks) ----
+        function sendCommand(text) {
+            if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+            if (isRecording) stopRecording();
+            stopAudioPlayback(true);
+            socket.send(JSON.stringify({ event: "text_prompt", text }));
+        }
+        function updateLockBadge(replyText) {
+            if (!replyText || !lockStatus) return;
+            const t = String(replyText);
+            const locked = /🔒.*locked|🔐.*(required|NOT authenticated|enrolled but NOT)|⛔ Wrong|still locked/i.test(t);
+            const unlocked = /🔓 Unlocked|OTP accepted|unlocked \(~|enrolled \+ authenticated/i.test(t);
+            if (unlocked) lockStatus.innerText = "🔓 unlocked";
+            else if (locked) lockStatus.innerText = "🔒 locked";
+            else if (/Security PIN: set/i.test(t)) lockStatus.innerText = /This surface: unlocked/i.test(t) ? "🔓 unlocked" : "🔒 locked";
+            else if (/Security PIN: not set/i.test(t) && /OTP: not enrolled/i.test(t)) lockStatus.innerText = "🔓 open";
+            else if (/OTP: enrolled/i.test(t)) lockStatus.innerText = /authenticated/i.test(t) && !/NOT authenticated/i.test(t) ? "🔓 otp ok" : "🔒 otp needed";
+        }
+        const securityModal = document.getElementById("securityModal");
+        const openSecurityBtn = document.getElementById("openSecurityBtn");
+        const closeSecurityBtn = document.getElementById("closeSecurityBtn");
+        const cancelSecurityBtn = document.getElementById("cancelSecurityBtn");
+        const secStatusBtn = document.getElementById("secStatusBtn");
+        openSecurityBtn.addEventListener("click", () => securityModal.classList.add("active"));
+        closeSecurityBtn.addEventListener("click", () => securityModal.classList.remove("active"));
+        cancelSecurityBtn.addEventListener("click", () => securityModal.classList.remove("active"));
+        if (secStatusBtn) secStatusBtn.addEventListener("click", () => { sendCommand("@security-status"); sendCommand("@otp-status"); });
+        document.getElementById("secCheckBtn").addEventListener("click", () => sendCommand("@security-status"));
+        document.getElementById("otpCheckBtn").addEventListener("click", () => sendCommand("@otp-status"));
+        document.getElementById("unlockBtn").addEventListener("click", () => {
+            const v = document.getElementById("pinInput").value.trim();
+            sendCommand(v ? `@unlock ${v}` : "@unlock");
+        });
+        document.getElementById("lockBtn").addEventListener("click", () => sendCommand("@lock"));
+        document.getElementById("setPinBtn").addEventListener("click", () => {
+            const np = document.getElementById("newPinInput").value.trim();
+            const cur = document.getElementById("pinInput").value.trim();
+            sendCommand(np ? `@set-security-pin ${np}${cur ? " " + cur : ""}` : "@set-security-pin");
+        });
+        document.getElementById("removePinBtn").addEventListener("click", () => {
+            const cur = document.getElementById("pinInput").value.trim();
+            sendCommand(cur ? `@remove-security-pin ${cur}` : "@remove-security-pin");
+        });
+        document.getElementById("otpLoginBtn").addEventListener("click", () => {
+            const v = document.getElementById("otpInput").value.trim();
+            sendCommand(v ? `@otp-login ${v}` : "@otp-login");
+        });
+        document.getElementById("otpLockBtn").addEventListener("click", () => sendCommand("@otp-lock"));
+        document.getElementById("otpSetBtn").addEventListener("click", () => sendCommand("@otp-set"));
+        document.getElementById("otpRemoveBtn").addEventListener("click", () => {
+            const v = document.getElementById("otpInput").value.trim();
+            sendCommand(v ? `@otp-remove ${v}` : "@otp-remove");
+        });
+        document.getElementById("unlockMinutesBtn").addEventListener("click", () => {
+            const v = parseInt(document.getElementById("unlockMinutesInput").value, 10);
+            sendCommand(Number.isFinite(v) ? `@set-setting security_unlock_minutes ${Math.min(Math.max(v, 1), 1440)}` : "@security-status");
+        });
+
+        // ---- Supported commands browser (all recent @ commands) ----
+        // The @unlock description is dynamic: it always shows the live
+        // `security_unlock_minutes` value from app_settings.json (via
+        // currentSettings, synced on connect / settings_updated) instead of
+        // a hard-coded "(default 10 min)" string.
+        function liveUnlockMinutes() {
+            const v = Math.floor(Number(currentSettings && currentSettings.security_unlock_minutes));
+            return Number.isFinite(v) ? Math.min(Math.max(v, 1), 1440) : 10;
+        }
+        function liveUnlockDesc() {
+            const mins = liveUnlockMinutes();
+            return `Unlock this surface (${mins} min, from security_unlock_minutes). Needs @otp-login first when OTP enrolled.`;
+        }
+        const SUPPORTED_COMMANDS = [
+            { g: "🔒 Security PIN", c: "@set-security-pin <6+ digits> [current-pin]", d: "Set/change PIN. First setup needs no PIN." },
+            { g: "🔒 Security PIN", c: "@unlock <pin>", dynamicUnlock: true, d: "Unlock this surface. Needs @otp-login first when OTP enrolled." },
+            { g: "🔒 Security PIN", c: "@lock", d: "Re-lock PIN layer immediately." },
+            { g: "🔒 Security PIN", c: "@security-status", d: "Show PIN set? + unlocked? + OTP state." },
+            { g: "🔒 Security PIN", c: "@remove-security-pin [pin]", d: "Remove PIN (needs unlock or inline PIN)." },
+            { g: "🔐 OTP 2FA", c: "@otp-set [account]", d: "Enroll authenticator secret (needs @unlock when PIN set)." },
+            { g: "🔐 OTP 2FA", c: "@otp-login <code>", d: "Authenticate this surface with 6-digit code." },
+            { g: "🔐 OTP 2FA", c: "@otp-lock", d: "Drop OTP auth on this surface." },
+            { g: "🔐 OTP 2FA", c: "@otp-status", d: "Show OTP enrolled? + authenticated?" },
+            { g: "🔐 OTP 2FA", c: "@otp-remove <code>", d: "Remove OTP (needs OTP auth + PIN unlock)." },
+            { g: "ℹ️ General", c: "@help", d: "Full command manual (locked until @otp-login/@unlock)." },
+            { g: "ℹ️ General", c: "@clear", d: "Clear conversation context." },
+            { g: "🤖 Models", c: "@model [name]", d: "View/switch shared model." },
+            { g: "🤖 Models", c: "@models", d: "List models across providers." },
+            { g: "🤖 Models", c: "@set-api-key <provider> <key>", d: "Save provider API key." },
+            { g: "🤖 Models", c: "@api-keys", d: "Show configured API keys." },
+            { g: "🧠 Memory", c: "@remember <text>", d: "Save memory for active character." },
+            { g: "🧠 Memory", c: "@memories [query]", d: "List/search 15 recent memories." },
+            { g: "🧠 Memory", c: "@memories-all [query]", d: "List/search ALL memories." },
+            { g: "🧠 Memory", c: "@memory-langs", d: "Per-language pool counts." },
+            { g: "🧠 Memory", c: "@forget <id>", d: "Forget a memory." },
+            { g: "🧠 Memory", c: "@update-memory <id> <text>", d: "Update a memory." },
+            { g: "🧠 Memory", c: "@correct <statement>", d: "Submit explicit correction." },
+            { g: "🧠 Memory", c: "@knowledge [query]", d: "List/search knowledge base." },
+            { g: "🧠 Memory", c: "@teach <title: content>", d: "Teach a concept." },
+            { g: "🧠 Memory", c: "@stats", d: "DB/memory/knowledge stats." },
+            { g: "🧠 Memory", c: "@learning-logs [limit]", d: "Recent learning events." },
+            { g: "🧠 Memory", c: "@set-learning [on|off]", d: "Toggle background learning." },
+            { g: "📋 Tasks", c: "@register-task <desc>", d: "New task (Processing)." },
+            { g: "📋 Tasks", c: "@get-tasks", d: "Active tasks." },
+            { g: "📋 Tasks", c: "@all-tasks", d: "All tasks incl. finished." },
+            { g: "⏱ Proactive", c: "@set-proactive-timer <min>", d: "Idle check-in timer." },
+            { g: "⏱ Proactive", c: "@proactive-status", d: "Timer settings." },
+            { g: "🎭 Persona", c: "@character [name]", d: "View/switch persona." },
+            { g: "🎭 Persona", c: "@characters", d: "List personas." },
+            { g: "🎭 Persona", c: "@wake <name> / @sleep <name>", d: "Telegram polling on/off." },
+            { g: "🎭 Persona", c: "@create-character <name> | <prompt>", d: "Create persona." },
+            { g: "🎭 Persona", c: "@whatsapp-pair <phone>", d: "WhatsApp pairing code." },
+            { g: "🎭 Persona", c: "@reset-whatsapp-auth", d: "Reset WhatsApp auth." },
+            { g: "🎭 Simulation", c: "@simulation <name>", d: "Start/resume simulation." },
+            { g: "🎭 Simulation", c: "@simulation-end", d: "Archive & end simulation." },
+            { g: "🎭 Simulation", c: "@simulations", d: "List archives." },
+            { g: "🎭 Simulation", c: "@simulation-search <q>", d: "Search archives." },
+            { g: "🎭 Simulation", c: "@simulation-review <name>", d: "Full review of a simulation." },
+            { g: "💬 Sessions", c: "@sessions / @new-session", d: "List / start sessions." },
+            { g: "💾 Backup", c: "@export-settings / @import-settings", d: "Backup / restore state." },
+            { g: "💾 Backup", c: "@settings / @set-setting <k> <v>", d: "View / change settings." },
+            { g: "🛠 Coding", c: "@make <desc>", d: "Ollama CLI build task." },
+            { g: "🛠 Coding", c: "@create-file <path> [content]", d: "Create file in project path." },
+            { g: "🛠 Coding", c: "@opencli <task>", d: "OpenAI coding agent." },
+            { g: "🛠 Coding", c: "@opencode <task>", d: "External opencode CLI run." },
+            { g: "🛠 Coding", c: "@opencode-model [model]", d: "Show/set opencode model." },
+            { g: "🛠 Coding", c: "@opencode-setup [step]", d: "Guided opencode setup + test." },
+            { g: "🍼 BabyAGI", c: "@babyagi <objective>", d: "Autonomous planning loop." },
+            { g: "🔌 MCP", c: "@mcp-status / @mcp-tools", d: "MCP servers/tools." },
+            { g: "🔌 MCP", c: "@mcp-call <server__tool> [json]", d: "Call one MCP tool." },
+            { g: "🔍 Search", c: "@fact-check <claim>", d: "Verify claim via papers." },
+            { g: "🔍 Search", c: "@youtube-play <q> / @play", d: "YouTube playback." },
+            { g: "🔍 Search", c: "@spotify-play <q>", d: "Spotify playback." },
+            { g: "🔍 Search", c: "@blog <topic>", d: "Draft blog post." },
+            { g: "🔍 Search", c: "@astro-post <topic>", d: "Publish Astro post." },
+            { g: "🔍 Search", c: "@browser-open <url> / @browser-read", d: "Local browser tools." },
+            { g: "🪡 Needle", c: "@needle <request>", d: "On-device tool routing." },
+            { g: "🪡 Needle", c: "@needle-status", d: "Needle install/model status." },
+            { g: "📺 Cast", c: "@cast-scan / @cast <url>", d: "TV discovery + cast." },
+            { g: "📺 Cast", c: "@cast-status / @cast-stop", d: "Cast state / stop." },
+            { g: "🎙 Voice", c: "@web [on|off]", d: "This web UI toggle." },
+            { g: "🎙 Voice", c: "@voice-reply [on|off]", d: "Auto voice replies." },
+            { g: "🎙 Voice", c: "@tts <text> / @voice <file>", d: "Local TTS / STT." },
+        ];
+        const commandsModal = document.getElementById("commandsModal");
+        const openCommandsBtn = document.getElementById("openCommandsBtn");
+        const closeCommandsBtn = document.getElementById("closeCommandsBtn");
+        const cancelCommandsBtn = document.getElementById("cancelCommandsBtn");
+        const cmdSearchInput = document.getElementById("cmdSearchInput");
+        const cmdList = document.getElementById("cmdList");
+        const cmdHelpBtn = document.getElementById("cmdHelpBtn");
+        const cmdHelpSendBtn = document.getElementById("cmdHelpSendBtn");
+        function renderCommands(filter) {
+            const q = (filter || "").toLowerCase();
+            cmdList.innerHTML = "";
+            let lastGroup = "";
+            SUPPORTED_COMMANDS.filter((e) => {
+                const desc = e.dynamicUnlock ? liveUnlockDesc() : e.d;
+                return !q || (e.c + " " + desc + " " + e.g).toLowerCase().includes(q);
+            }).forEach((e) => {
+                if (e.g !== lastGroup) {
+                    const h = document.createElement("div");
+                    h.style.cssText = "font-size: 12px; font-weight: 700; color: var(--accent-cyan); margin-top: 6px;";
+                    h.innerText = e.g;
+                    cmdList.appendChild(h);
+                    lastGroup = e.g;
+                }
+                const row = document.createElement("div");
+                row.style.cssText = "display: flex; gap: 8px; align-items: center; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 8px 10px;";
+                const txt = document.createElement("div");
+                txt.style.cssText = "flex: 1; font-size: 13px;";
+                txt.innerText = `${e.c} — ${e.dynamicUnlock ? liveUnlockDesc() : e.d}`;
+                const go = document.createElement("button");
+                go.className = "btn";
+                go.style.padding = "6px 12px";
+                go.innerText = "▶ Send";
+                go.addEventListener("click", () => { sendCommand(e.c.replace(/ <.*| \[.*/, "")); commandsModal.classList.remove("active"); });
+                row.appendChild(txt);
+                row.appendChild(go);
+                cmdList.appendChild(row);
+            });
+        }
+        openCommandsBtn.addEventListener("click", () => { renderCommands(cmdSearchInput.value); commandsModal.classList.add("active"); });
+        closeCommandsBtn.addEventListener("click", () => commandsModal.classList.remove("active"));
+        cancelCommandsBtn.addEventListener("click", () => commandsModal.classList.remove("active"));
+        cmdSearchInput.addEventListener("input", () => renderCommands(cmdSearchInput.value));
+        cmdHelpSendBtn.addEventListener("click", () => { sendCommand("@help"); commandsModal.classList.remove("active"); });
+        if (cmdHelpBtn) cmdHelpBtn.addEventListener("click", () => sendCommand("@help"));
+        renderCommands("");
 
         connectWebSocket();
     </script>

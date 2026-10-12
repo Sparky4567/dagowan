@@ -19,7 +19,7 @@ export class ProactiveChatManager {
     setIdleTimerMinutes(minutes) {
         const mins = parseFloat(minutes);
         if (isNaN(mins) || mins <= 0) {
-            return { success: false, message: "⚠️ Usage: /set-proactive-timer <minutes> (e.g. /set-proactive-timer 5)" };
+            return { success: false, message: "⚠️ Usage: @set-proactive-timer <minutes> (e.g. @set-proactive-timer 5)" };
         }
         const idleSeconds = Math.round(mins * 60);
         this.settings.proactive_idle_seconds = idleSeconds;
@@ -41,7 +41,7 @@ export class ProactiveChatManager {
     setCheckIntervalSeconds(seconds) {
         const secs = parseInt(seconds, 10);
         if (isNaN(secs) || secs < 5) {
-            return { success: false, message: "⚠️ Usage: /set-proactive-check <seconds> (min 5 seconds)" };
+            return { success: false, message: "⚠️ Usage: @set-proactive-check <seconds> (min 5 seconds)" };
         }
         this.settings.proactive_check_seconds = secs;
         saveSettings(this.settings);
@@ -144,18 +144,20 @@ export class ProactiveChatManager {
 }
 
 /**
- * Global command handler for proactive chat slash commands across CLI, Telegram, and WhatsApp bridges.
+ * Global command handler for proactive chat @ commands across CLI, Telegram, and WhatsApp bridges.
+ * Leading "/" is still accepted for backward compatibility and normalized to "/" internally.
  */
 export function handleProactiveCommand(inputStr, settings, proactiveManager = null) {
-    const input = String(inputStr || "").trim();
+    const rawInput = String(inputStr || "").trim();
+    const input = rawInput.startsWith("@") ? "/" + rawInput.slice(1) : rawInput;
     const lower = input.toLowerCase();
 
-    // 1. /set-proactive-timer <minutes> or /proactive-timer <minutes>
+    // 1. @set-proactive-timer <minutes> or @proactive-timer <minutes>
     if (lower.startsWith("/set-proactive-timer ") || lower.startsWith("/proactive-timer ")) {
         const parts = input.split(/\s+/);
         const mins = parts[1];
         if (!mins) {
-            return { handled: true, output: "⚠️ Usage: /set-proactive-timer <minutes> (e.g. /set-proactive-timer 5)" };
+            return { handled: true, output: "⚠️ Usage: @set-proactive-timer <minutes> (e.g. @set-proactive-timer 5)" };
         }
         if (proactiveManager) {
             const res = proactiveManager.setIdleTimerMinutes(mins);
@@ -163,7 +165,7 @@ export function handleProactiveCommand(inputStr, settings, proactiveManager = nu
         } else {
             const num = parseFloat(mins);
             if (isNaN(num) || num <= 0) {
-                return { handled: true, output: "⚠️ Usage: /set-proactive-timer <minutes>" };
+                return { handled: true, output: "⚠️ Usage: @set-proactive-timer <minutes>" };
             }
             settings.proactive_idle_seconds = Math.round(num * 60);
             settings.proactive_chat_enabled = true;
@@ -175,7 +177,7 @@ export function handleProactiveCommand(inputStr, settings, proactiveManager = nu
         }
     }
 
-    // 2. /proactive-chat [on|off] or /proactive [on|off]
+    // 2. @proactive-chat [on|off] or @proactive [on|off]
     if (lower === "/proactive-chat" || lower === "/proactive" || lower.startsWith("/proactive-chat ") || lower.startsWith("/proactive ")) {
         const parts = input.split(/\s+/);
         const flag = parts[1] || null;
@@ -196,7 +198,7 @@ export function handleProactiveCommand(inputStr, settings, proactiveManager = nu
         }
     }
 
-    // 3. /proactive-status or /proactive-timer-status
+    // 3. @proactive-status or @proactive-timer-status
     if (lower === "/proactive-status" || lower === "/proactive-timer-status") {
         if (proactiveManager) {
             return { handled: true, output: proactiveManager.getStatus().formatted };
@@ -210,7 +212,7 @@ export function handleProactiveCommand(inputStr, settings, proactiveManager = nu
         }
     }
 
-    // 4. /stop-proactive-timer or /stop-proactive
+    // 4. @stop-proactive-timer or @stop-proactive
     if (lower === "/stop-proactive-timer" || lower === "/stop-proactive") {
         if (proactiveManager) {
             const res = proactiveManager.stop();
@@ -222,7 +224,7 @@ export function handleProactiveCommand(inputStr, settings, proactiveManager = nu
         }
     }
 
-    // 5. /set-proactive-check <seconds> or /proactive-check <seconds>
+    // 5. @set-proactive-check <seconds> or @proactive-check <seconds>
     if (lower.startsWith("/set-proactive-check ") || lower.startsWith("/proactive-check ")) {
         const parts = input.split(/\s+/);
         const secs = parts[1];
@@ -232,7 +234,7 @@ export function handleProactiveCommand(inputStr, settings, proactiveManager = nu
         } else {
             const num = parseInt(secs, 10);
             if (isNaN(num) || num < 5) {
-                return { handled: true, output: "⚠️ Usage: /set-proactive-check <seconds> (min 5 seconds)" };
+                return { handled: true, output: "⚠️ Usage: @set-proactive-check <seconds> (min 5 seconds)" };
             }
             settings.proactive_check_seconds = num;
             saveSettings(settings);

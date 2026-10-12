@@ -1,0 +1,98 @@
+services:
+  app:
+    build: .
+    image: dagowan:latest
+    container_name: dagowan
+    stdin_open: true # keep interactive CLI attached (`docker attach dagowan`)
+    tty: true
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      BIND_HOST: "0.0.0.0"
+      HOST: "0.0.0.0"
+      # Point at Ollama on the Docker host by default.
+      # With `--profile ollama`, compose overrides this to the bundled service.
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
+      WHATSAPP_PORT: "${WHATSAPP_PORT:-8765}"
+      WHATSAPP_STATUS_PORT: "${WHATSAPP_STATUS_PORT:-8766}"
+      VOICE_PORT: "${VOICE_PORT:-8767}"
+      WEB_PORT: "${WEB_PORT:-8767}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      CLAUDE_API_KEY: "${CLAUDE_API_KEY:-}"
+      GROK_API_KEY: "${GROK_API_KEY:-}"
+      WHATSAPP_PHONE: "${WHATSAPP_PHONE:-}"
+      WHATSAPP_ENABLED: "${WHATSAPP_ENABLED:-}"
+      WEB_ENABLED: "${WEB_ENABLED:-}"
+      WHATSAPP_QR_MODE: "${WHATSAPP_QR_MODE:-auto}"
+      TELEGRAM_TOKEN: "${TELEGRAM_TOKEN:-}"
+      CAST_DEVICE_NAME: "${CAST_DEVICE_NAME:-}"
+      CAST_DEVICE_HOST: "${CAST_DEVICE_HOST:-}"
+      CAST_DEVICE_TYPE: "${CAST_DEVICE_TYPE:-}"
+      CAST_PORT: "${CAST_PORT:-}"
+      CAST_TRANSCODE: "${CAST_TRANSCODE:-}"
+      CAST_MAX_HEIGHT: "${CAST_MAX_HEIGHT:-}"
+      # Astro publishing (@astro-post): point at the mounted checkout below
+      # (empty default = leave app_settings.json / @astro-path value alone).
+      ASTRO_PROJECT_PATH: "${ASTRO_PROJECT_PATH:-}"
+      ASTRO_BACKUP_DIR: "${ASTRO_BACKUP_DIR:-}"
+      ASTRO_DEFAULT_LANG: "${ASTRO_DEFAULT_LANG:-}"
+      ASTRO_DEFAULT_TEMPLATE: "${ASTRO_DEFAULT_TEMPLATE:-}"
+    # NOTE: @cast TV discovery (SSDP/mDNS multicast) and the TV-pull relay
+    # need the container on the real LAN. On Linux, uncomment the next line
+    # (bridge mode + published ports cannot carry multicast; on Docker
+    # Desktop for macOS/Windows host mode is a no-op — use the native
+    # binary there instead).
+    # network_mode: host
+    ports:
+      - "${WHATSAPP_PORT:-8765}:8765" # WhatsApp HTTP bridge (/chat, /health)
+      - "${WHATSAPP_STATUS_PORT:-8766}:8766" # WhatsApp QR / pairing view
+      - "${VOICE_PORT:-8767}:8767" # Dagowan voice Web UI + WebSocket
+      - "${CAST_PORT:-8901}:8901" # TV cast relay (/stream; used with pinned IPs even without host mode)
+      # - "11434:11434" # uncomment only if you publish a host Ollama into the container network
+    volumes:
+      - dagowan-data:/app/data
+      - dagowan-wa-auth:/app/whatsapp_bridge/auth
+      - ./notes:/app/notes
+      - ./pdfs:/app/pdfs
+      - ./projects:/app/projects
+      - ./backups:/app/backups
+      - ./logs:/app/logs
+      - ./tmp:/app/tmp
+      # Root *.json state (app_settings, memory, sessions, tasks, characters)
+      # persists in the dagowan-config volume below. Host bind dirs
+      # (notes/pdfs/projects/backups/logs/tmp) stay human-editable, while
+      # `dagowan-data` keeps SQLite (data/bot.db) and `dagowan-wa-auth`
+      # keeps the linked WhatsApp session. Use `@export-settings` / `./backups`
+      # for portable backups.
+      - dagowan-config:/app/config-state
+      # Astro publishing (@astro-post): the container has no checkout by
+      # itself — mount yours and set ASTRO_PROJECT_PATH to match, e.g.:
+      #   ASTRO_HOST_PATH=/home/user/github/artefaktas-astro ./dockerize.sh run
+      # (dockerize.sh mounts it at /astro and exports ASTRO_PROJECT_PATH).
+      # For `up`, uncomment and edit:
+      # - ${ASTRO_HOST_PATH}:/astro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--web"]
+    restart: unless-stopped
+
+  # Optional local Ollama daemon bundled next to the app.
+  # Start it with:  docker compose --profile ollama up --build
+  # and set:        OLLAMA_HOST=http://ollama:11434
+  ollama:
+    image: ollama/ollama:latest
+    container_name: dagowan-ollama
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  dagowan-data:
+  dagowan-wa-auth:
+  dagowan-config:
+  ollama-data:

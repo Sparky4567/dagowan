@@ -1,11 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
+import { getMemoryStore } from "./memory.js";
+import { KnowledgeStore } from "./knowledge.js";
+import { getBotDatabase } from "./db/database.js";
+import { getLearningPipeline } from "./learning.js";
 
 const APP_SETTINGS_FILE = "app_settings.json";
 const BACKUPS_DIR = "backups";
 
 export const DEFAULT_SETTINGS = {
-    model: "gpt-oss:120b-cloud",
+    // Resolved at first startup to the first installed Ollama model.
+    model: "",
     server_url: "http://localhost:11434",
     system_template: "You are a helpful assistant.",
     mem_limit: 10,
@@ -13,6 +18,9 @@ export const DEFAULT_SETTINGS = {
     active_workspace: "default",
     whatsapp_enabled: false,
     whatsapp_phone: "",
+    whatsapp_mention_only_groups: true,
+    whatsapp_strip_mention: true,
+    whatsapp_mention_prefix: true,
     proactive_chat_enabled: false,
     proactive_idle_seconds: 300,
     proactive_check_seconds: 60,
@@ -20,12 +28,97 @@ export const DEFAULT_SETTINGS = {
     gemini_api_key: "",
     claude_api_key: "",
     grok_api_key: "",
+    stt_engine: "local",
+    tts_engine: "local",
+    openai_tts_voice: "alloy",
+    openai_tts_model: "tts-1",
+    openai_stt_model: "whisper-1",
     voice_reply_enabled: false,
     task_reminder_enabled: false,
     task_reminder_minutes: 15,
     telegram_token: "",
+    persona_polling_on_demand: true,
+    persona_idle_timeout_minutes: 15,
+    persona_polling_sweep_seconds: 60,
     web_enabled: false,
     voice_server_enabled: false,
+    auto_learning_enabled: true,
+    learning_model: "",
+    knowledge_enabled: true,
+    project_path: "projects",
+    browser_enabled: true,
+    browser_headless: "auto",
+    browser_allowed_domains: ["youtube.com", "youtu.be", "google.com", "giphy.com", "spotify.com", "wordpress.com", "blogger.com", "blogspot.com"],
+    browser_idle_close_ms: 300000,
+    youtube_api_key: "",
+    spotify_client_id: "",
+    spotify_client_secret: "",
+    play_source: "auto",
+    wordpress_site_url: "",
+    wordpress_username: "",
+    wordpress_app_password: "",
+    blogger_blog_id: "",
+    blogger_api_key: "",
+    blogger_access_token: "",
+    blogger_client_id: "",
+    blogger_client_secret: "",
+    blogger_refresh_token: "",
+    blogger_token_expiry: 0,
+    blogger_oauth_client_file: "",
+    blogger_auth_host: "",
+    blog_source: "auto",
+    astro_project_path: "/home/writing_machine/github/artefaktas-astro",
+    astro_backup_dir: "",
+    astro_default_lang: "lt",
+    astro_default_template: "daily",
+    astro_hero_image: "",
+    astro_package_manager: "npm",
+    astro_auto_build: true,
+    astro_auto_vault: true,
+    astro_auto_push: true,
+    semantic_scholar_api_key: "",
+    factcheck_max_results: 3,
+    factcheck_source: "auto",
+    factcheck_gemini_model: "gemini-2.5-flash",
+    websearch_enabled: true,
+    websearch_provider: "auto",
+    websearch_max_results: 5,
+    websearch_timeout_ms: 12000,
+    brave_api_key: "",
+    tavily_api_key: "",
+    needle_enabled: false,
+    needle_min_confidence: 0.7,
+    needle_model_path: "",
+    needle_python: "",
+    needle_daemon_idle_ms: 300000,
+    opencli_enabled: true,
+    opencli_model: "gpt-4o-mini",
+    opencli_max_iterations: 12,
+    opencli_allowed_chats: [],
+    opencode_enabled: true,
+    opencode_model: "",
+    opencode_allowed_chats: [],
+    opencode_auto: false,
+    opencode_timeout_ms: 180000,
+    opencode_bin: "",
+    mcp_enabled: true,
+    mcp_config_path: "mcp_servers.json",
+    mcp_timeout_ms: 15000,
+    security_pin_hash: "",
+    security_pin_salt: "",
+    security_pin_set_at: 0,
+    security_unlock_minutes: 10,
+    otp_secret: "",
+    otp_set_at: 0,
+    otp_account: "llama-chat",
+    otp_issuer: "LlamaChat",
+    cast_device_name: "",
+    cast_device_host: "",
+    cast_device_type: "auto",
+    cast_port: 8901,
+    cast_transcode: "auto",
+    cast_max_height: 0,
+    cast_scan_timeout_ms: 4000,
 };
 
 export function loadSettings(filePath = APP_SETTINGS_FILE) {
@@ -80,13 +173,36 @@ export function exportSettings(customName = null, dirPath = BACKUPS_DIR) {
     const appSettings = loadSettings();
 
     let memoriesData = [];
-    if (fs.existsSync("memory.json")) {
-        try {
-            const raw = fs.readFileSync("memory.json", "utf8");
-            const parsed = JSON.parse(raw);
-            memoriesData = Array.isArray(parsed) ? parsed : (parsed.memories || []);
-        } catch {}
+    try {
+        const memStore = getMemoryStore();
+        memoriesData = memStore.listMemories();
+    } catch {
+        if (fs.existsSync("memory.json")) {
+            try {
+                const raw = fs.readFileSync("memory.json", "utf8");
+                const parsed = JSON.parse(raw);
+                memoriesData = Array.isArray(parsed) ? parsed : (parsed.memories || []);
+            } catch {}
+        }
     }
+
+    let knowledgeData = [];
+    try {
+        const knStore = new KnowledgeStore();
+        knowledgeData = knStore.listKnowledge({ status: null });
+    } catch {}
+
+    let learningLogs = [];
+    try {
+        const db = getBotDatabase();
+        learningLogs = db.getLogs(100);
+    } catch {}
+
+    let learnedRules = [];
+    try {
+        const pipeline = getLearningPipeline();
+        learnedRules = pipeline.listRules();
+    } catch {}
 
     let tasksData = [];
     if (fs.existsSync("tasks.json")) {
@@ -111,15 +227,31 @@ export function exportSettings(customName = null, dirPath = BACKUPS_DIR) {
         } catch {}
     }
 
+    let simulationsData = [];
+    try {
+        if (fs.existsSync("data/simulations")) {
+            for (const f of fs.readdirSync("data/simulations")) {
+                if (!f.endsWith(".json") || f.endsWith(".tmp")) continue;
+                try {
+                    simulationsData.push(JSON.parse(fs.readFileSync(path.join("data/simulations", f), "utf8")));
+                } catch {}
+            }
+        }
+    } catch {}
+
     const payload = {
         app: "llama-bun",
-        version: "1.0",
+        version: "2.0",
         exported_at: new Date().toISOString(),
         app_settings: appSettings,
         memories: memoriesData,
+        knowledge: knowledgeData,
+        learning_logs: learningLogs,
+        learned_rules: learnedRules,
         tasks: tasksData,
         characters: charactersData,
         sessions: sessionsData,
+        simulations: simulationsData,
     };
 
     const tmpFile = `${backupPath}.tmp`;
@@ -195,28 +327,76 @@ export function importSettings(backupFilepath, dirPath = BACKUPS_DIR) {
 
         // 2. Memories
         if (Array.isArray(data.memories)) {
-            const payload = JSON.stringify({ memories: data.memories }, null, 2);
-            fs.writeFileSync("memory.json", payload, "utf8");
+            try {
+                const memStore = getMemoryStore();
+                for (const m of data.memories) {
+                    if (m) memStore.addMemory(m);
+                }
+            } catch {
+                const payload = JSON.stringify({ memories: data.memories }, null, 2);
+                fs.writeFileSync("memory.json", payload, "utf8");
+            }
             summaryParts.push(`${data.memories.length} memories`);
         }
 
-        // 3. Tasks
+        // 3. Knowledge base
+        if (Array.isArray(data.knowledge) && data.knowledge.length > 0) {
+            try {
+                const knStore = new KnowledgeStore();
+                for (const k of data.knowledge) {
+                    if (k && k.title && k.content) {
+                        knStore.addKnowledge(k);
+                    }
+                }
+                summaryParts.push(`${data.knowledge.length} knowledge entries`);
+            } catch {}
+        }
+
+        // 4. Tasks
         if (Array.isArray(data.tasks)) {
             const payload = JSON.stringify({ tasks: data.tasks }, null, 2);
             fs.writeFileSync("tasks.json", payload, "utf8");
             summaryParts.push(`${data.tasks.length} tasks`);
         }
 
-        // 4. Characters
+        // 5. Characters
         if (data.characters && typeof data.characters === "object") {
             fs.writeFileSync("characters.json", JSON.stringify(data.characters, null, 2), "utf8");
             summaryParts.push("character profiles");
         }
 
-        // 5. Sessions
+        // 6. Sessions
         if (data.sessions && typeof data.sessions === "object") {
             fs.writeFileSync("chat_sessions.json", JSON.stringify(data.sessions, null, 2), "utf8");
             summaryParts.push("chat sessions");
+        }
+
+        // 7. Learned Rules
+        if (Array.isArray(data.learned_rules) && data.learned_rules.length > 0) {
+            try {
+                const pipeline = getLearningPipeline();
+                for (const r of data.learned_rules) {
+                    if (r && r.keywords && r.responses) {
+                        pipeline.addCandidateRule(r);
+                    }
+                }
+                summaryParts.push(`${data.learned_rules.length} learned rules`);
+            } catch {}
+        }
+
+        // 8. Simulations (separate chat archives in data/simulations/)
+        if (Array.isArray(data.simulations) && data.simulations.length > 0) {
+            try {
+                if (!fs.existsSync("data/simulations")) fs.mkdirSync("data/simulations", { recursive: true });
+                let restored = 0;
+                for (const s of data.simulations) {
+                    if (!s || typeof s !== "object" || !s.slug) continue;
+                    const safe = String(s.slug).toLowerCase().replace(/[^a-z0-9-_]+/g, "-").slice(0, 64) || "sim";
+                    fs.writeFileSync(path.join("data/simulations", `${safe}.json`), JSON.stringify(s, null, 2), "utf8");
+                    restored++;
+                }
+                if (restored > 0) summaryParts.push(`${restored} simulations`);
+            } catch {}
         }
 
         const restoredStr = summaryParts.length > 0 ? summaryParts.join(", ") : "data";

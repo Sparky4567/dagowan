@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "local": {
+      "command": "bun",
+      "args": ["src/mcp_local_server.js"],
+      "env": {},
+      "comment": "Built-in zero-dependency server (ping/read_file/list_directory). Auto-created by ensureMcpConfig; use relative or absolute script path."
+    },
+    "web": {
+      "command": "bun",
+      "args": ["src/mcp_web_server.js"],
+      "env": {},
+      "comment": "Built-in zero-dependency live web search (web_search/web_fetch: Brave/Tavily with keys, DuckDuckGo keyless fallback). Auto-created by ensureMcpConfig. Keys via env BRAVE_API_KEY / TAVILY_API_KEY or @set-api-key brave|tavily."
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {},
+      "disabled": true
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "env": {},
+      "disabled": true
+    }
+  }
+}

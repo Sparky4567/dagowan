@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 
 export class AgenticModule {
@@ -6,35 +6,56 @@ export class AgenticModule {
         this.youtubeUrl = "https://www.youtube.com/";
         this.googleUrl = "https://www.google.com/";
         this.giphyUrl = "https://giphy.com/";
+        this.spotifyUrl = "https://open.spotify.com/";
         this.defaultBrowserAddress = "https://www.google.com/";
     }
 
     /**
-     * Opens a URL using the default system browser cross-platform.
+     * Opens a URL in the user's default browser and VERIFIES the handoff.
+     * The previous fire-and-forget spawn() always reported success even when
+     * the opener failed (e.g. garcon unreachable from the app's environment),
+     * so callers logged opened=true while nothing reached the host browser
+     * and the URL was only visible in the controlled Chromium window.
+     * Tries $BROWSER first (ChromeOS containers set it to garcon-url-handler),
+     * then the platform opener, then common Linux browsers.
+     * Returns { success, url, method? } or { success:false, error }.
      */
     openUrl(url) {
         const platform = os.platform();
-        let command = "";
-        let args = [];
+        const candidates = [];
+        // $BROWSER may be "cmd --flag" style: first token is the binary.
+        const browserEnv = String(process.env.BROWSER || "").trim();
+        if (browserEnv && platform !== "win32" && platform !== "darwin") {
+            const tokens = browserEnv.split(/\s+/).filter(Boolean);
+            if (tokens.length > 0) candidates.push({ cmd: tokens[0], args: [...tokens.slice(1), url], method: "$BROWSER" });
+        }
 
         if (platform === "win32") {
-            command = "cmd.exe";
-            args = ["/c", "start", "", url];
+            candidates.push({ cmd: "cmd.exe", args: ["/c", "start", "", url], method: "start" });
         } else if (platform === "darwin") {
-            command = "open";
-            args = [url];
+            candidates.push({ cmd: "open", args: [url], method: "open" });
         } else {
-            command = "xdg-open";
-            args = [url];
+            candidates.push({ cmd: "xdg-open", args: [url], method: "xdg-open" });
+            for (const b of ["google-chrome", "chromium", "chromium-browser", "firefox"]) {
+                candidates.push({ cmd: b, args: [url], method: b });
+            }
         }
 
-        try {
-            const child = spawn(command, args, { detached: true, stdio: "ignore" });
-            child.unref();
-            return { success: true, url };
-        } catch (err) {
-            return { success: false, error: err.message };
+        const errors = [];
+        for (const c of candidates) {
+            try {
+                const r = spawnSync(c.cmd, c.args, { timeout: 15000, stdio: "ignore" });
+                if (r.error) {
+                    errors.push(`${c.method}: ${r.error.message}`);
+                    continue;
+                }
+                if (r.status === 0) return { success: true, url, method: c.method };
+                errors.push(`${c.method}: exit ${r.status}`);
+            } catch (err) {
+                errors.push(`${c.method}: ${err.message || String(err)}`);
+            }
         }
+        return { success: false, url, error: errors.join("; ") || "no opener available" };
     }
 
     openBrowser() {
@@ -62,14 +83,23 @@ export class AgenticModule {
         return { success: true, query, url };
     }
 
+    searchSpotify(query) {
+        const cleanQuery = encodeURIComponent(query.trim());
+        const url = `${this.spotifyUrl}search/${cleanQuery}`;
+        this.openUrl(url);
+        return { success: true, query, url };
+    }
+
     /**
      * Evaluates user input against agentic tool triggers.
      */
     selectTool(userInput) {
-        const inputStr = String(userInput).trim();
+        const rawStr = String(userInput).trim();
+        // Canonical "@" prefix (MCP-style); "/" still accepted and normalized.
+        const inputStr = rawStr.startsWith("@") ? "/" + rawStr.slice(1) : rawStr;
         const lower = inputStr.toLowerCase();
 
-        if (lower === "open browser" || lower === "/open-browser") {
+        if (lower === "open browser" || lower === "@open-browser" || lower === "/open-browser") {
             this.openBrowser();
             return { handled: true, status: true, message: "🌐 Opening web browser!" };
         }
@@ -122,6 +152,23 @@ export class AgenticModule {
             if (query) {
                 this.searchGiphy(query);
                 return { handled: true, status: true, message: `👾 Searching Giphy for "${query}"!` };
+            }
+        }
+
+        // Search Spotify (songs + podcasts, legacy fire-and-forget open)
+        if (
+            lower.startsWith("/search-spotify-for ") ||
+            (lower.includes("search") && lower.includes("spotify") && lower.includes("for"))
+        ) {
+            let query = inputStr;
+            ["/search-spotify-for", "search", "spotify", "for"].forEach((w) => {
+                const regex = new RegExp(`\\b${w}\\b`, "gi");
+                query = query.replace(regex, "");
+            });
+            query = query.trim();
+            if (query) {
+                this.searchSpotify(query);
+                return { handled: true, status: true, message: `🎧 Searching Spotify for "${query}"!` };
             }
         }
 

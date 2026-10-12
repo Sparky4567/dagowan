@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+bun.lockb
+.npm/
+
+# Build and cache
+dist/
+build/
+.cache/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & local configurations
+.env
+.env.local
+.env.*.local
+# Local MCP server registry (auto-bootstrapped by src/mcp.js; machine-specific paths)
+mcp_servers.json
+# Google OAuth client secrets (used by @blogger-auth; never commit)
+client_secret_*.json
+*-credentials.json
+
+# Runtime audio, temp, and scratch files
+tmp/
+temp/
+pdfs/voice_reply_*.wav
+pdfs/voice_reply_*.ogg
+pdfs/speech_*.wav
+pdfs/speech_*.ogg
+test_scratch_assistant/
+test_scratch/
+auth/
+whatsapp_bridge/auth/
+whatsapp_bridge/node_modules/
+ollama_cli/node_modules/
+ollama_cli/bun.lockb
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+data/*.db
+data/*.db-wal
+data/*.db-shm
+!data/.gitkeep
+
+# Headless browser profile (Chromium persistent context)
+data/browser-profile/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.save

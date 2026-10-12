@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { env, pipeline } from "@xenova/transformers";
 import { WaveFile } from "wavefile";
+import OpenAI from "openai";
 
 // Automatically apply ONNX logging level patch if available
 try {
@@ -251,3 +252,165 @@ export async function synthesizeSpeechLocal(text, outputAudioPath) {
 
     return { audioPath: targetPath };
 }
+
+/**
+ * OpenAI Speech-To-Text (STT): Transcribes an audio file via OpenAI Whisper API (whisper-1).
+ */
+export async function transcribeAudioOpenAI(inputAudioPath, apiKey, options = {}) {
+    if (!fs.existsSync(inputAudioPath)) {
+        throw new Error(`Audio file not found: ${inputAudioPath}`);
+    }
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    if (!key) {
+        throw new Error("OpenAI API Key is missing. Please set it in app_settings.json or settings panel.");
+    }
+
+    const client = new OpenAI({ apiKey: key });
+    const fileStream = fs.createReadStream(inputAudioPath);
+
+    const response = await client.audio.transcriptions.create({
+        file: fileStream,
+        model: options.model || "whisper-1",
+        language: options.language || undefined,
+    });
+
+    return { text: (response.text || "").trim() };
+}
+
+/**
+ * OpenAI Text-To-Speech (TTS): Synthesizes text into audio using OpenAI TTS API (tts-1 / tts-1-hd).
+ */
+export async function synthesizeSpeechOpenAI(text, outputAudioPath, apiKey, options = {}) {
+    if (!text || !text.trim()) {
+        throw new Error("Cannot synthesize speech from empty text.");
+    }
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    if (!key) {
+        throw new Error("OpenAI API Key is missing. Please set it in app_settings.json or settings panel.");
+    }
+
+    let cleanText = text
+        .replace(/```[\s\S]*?```/g, " [code block omitted] ")
+        .replace(/https?:\/\/\S+/g, "")
+        .replace(/[*#_`~>|]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!cleanText) {
+        cleanText = "Here is the response.";
+    }
+
+    const client = new OpenAI({ apiKey: key });
+    const voice = options.voice || "alloy";
+    const model = options.model || "tts-1";
+
+    const mp3Response = await client.audio.speech.create({
+        model: model,
+        voice: voice,
+        input: cleanText,
+        response_format: "mp3",
+    });
+
+    const mp3Buffer = Buffer.from(await mp3Response.arrayBuffer());
+
+    const targetPath = path.resolve(outputAudioPath);
+    const targetDir = path.dirname(targetPath);
+    if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const tmpDir = path.join(process.cwd(), "tmp");
+    if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    const tmpMp3Path = path.join(tmpDir, `openai_tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp3`);
+    fs.writeFileSync(tmpMp3Path, mp3Buffer);
+
+    if (targetPath.endsWith(".wav")) {
+        const res = spawnSync("ffmpeg", ["-y", "-i", tmpMp3Path, "-ar", "24000", "-ac", "1", targetPath], { encoding: "utf8" });
+        if (fs.existsSync(tmpMp3Path)) fs.unlinkSync(tmpMp3Path);
+        if (res.status !== 0) {
+            fs.writeFileSync(targetPath, mp3Buffer);
+        }
+    } else {
+        if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
+        fs.renameSync(tmpMp3Path, targetPath);
+    }
+
+    return { audioPath: targetPath };
+}
+
+/**
+ * Unified Speech-To-Text (STT) Dispatcher: Automatically routes between OpenAI Whisper & Local Whisper.
+ */
+export async function transcribeAudio(inputAudioPath, options = {}, settings = {}) {
+    const sttEngine = (settings.stt_engine || "local").toLowerCase();
+    const apiKey = settings.openai_api_key || process.env.OPENAI_API_KEY;
+
+    if (sttEngine === "openai") {
+        if (!apiKey) {
+            console.warn("⚠️ OpenAI API key missing for STT. Falling back to local Whisper...");
+            return await transcribeAudioLocal(inputAudioPath, options);
+        }
+        return await transcribeAudioOpenAI(inputAudioPath, apiKey, {
+            model: settings.openai_stt_model || "whisper-1",
+            ...options,
+        });
+    }
+
+    return await transcribeAudioLocal(inputAudioPath, options);
+}
+
+export function cleanMarkdownToText(text) {
+    if (!text) return "";
+    return text
+        // 1. Remove code blocks ```lang\ncode\n``` -> code
+        .replace(/```[a-z]*\n([\s\S]*?)\n```/gi, "$1")
+        // 2. Remove inline code `code` -> code
+        .replace(/`([^`]+)`/g, "$1")
+        // 3. Convert headers (# Title, ## Subtitle) to clean lines
+        .replace(/^#{1,6}\s+(.+)$/gm, "$1\n")
+        // 4. Remove bold & italic (**text**, *text*, __text__, _text_)
+        .replace(/(\*\*|__|[*_])(.*?)\1/g, "$2")
+        // 5. Remove strikethrough (~~text~~)
+        .replace(/~~(.*?)~~/g, "$1")
+        // 6. Convert links [Anchor Text](http://...) -> Anchor Text
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        // 7. Remove image markdown ![Alt](http://...) -> Alt
+        .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+        // 8. Convert bullet lists (- item, * item, + item) to bullet dots (• item)
+        .replace(/^[\s]*[-*+]\s+/gm, "• ")
+        // 9. Convert numbered lists (1. item) to clean numbers (1. item)
+        .replace(/^[\s]*(\d+)\.\s+/gm, "$1. ")
+        // 10. Clean blockquotes (> text)
+        .replace(/^>\s+/gm, "")
+        // 11. Normalize multiple blank lines to double newlines (proper paragraph spacing)
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
+export const stripMarkdown = cleanMarkdownToText;
+
+/**
+ * Unified Text-To-Speech (TTS) Dispatcher: Automatically routes between OpenAI TTS & Local MMS-TTS.
+ */
+export async function synthesizeSpeech(text, outputAudioPath, settings = {}, options = {}) {
+    const cleanText = stripMarkdown(text);
+    const ttsEngine = (settings.tts_engine || "local").toLowerCase();
+    const apiKey = settings.openai_api_key || process.env.OPENAI_API_KEY;
+
+    if (ttsEngine === "openai") {
+        if (!apiKey) {
+            console.warn("⚠️ OpenAI API key missing for TTS. Falling back to local MMS-TTS...");
+            return await synthesizeSpeechLocal(cleanText, outputAudioPath);
+        }
+        return await synthesizeSpeechOpenAI(cleanText, outputAudioPath, apiKey, {
+            voice: settings.openai_tts_voice || "alloy",
+            model: settings.openai_tts_model || "tts-1",
+            ...options,
+        });
+    }
+
+    return await synthesizeSpeechLocal(cleanText, outputAudioPath);
+}
+

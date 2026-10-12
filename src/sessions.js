@@ -142,6 +142,9 @@ export function saveSession(sessionId, messages, characterId = null, filePath = 
     const store = readStore(filePath);
     const session = store.sessions.find((s) => s.id === sessionId);
     if (!session) return null;
+    if (characterId && session.character_id !== characterId && (!session.participant_character_ids || !session.participant_character_ids.includes(characterId))) {
+        return null;
+    }
 
     session.messages = messages;
     if (!session.custom_title) {
@@ -166,6 +169,9 @@ export function renameSession(sessionId, title, characterId = null, filePath = S
     if (!session) {
         return { success: false, message: `Session #${sessionId} not found.` };
     }
+    if (characterId && session.character_id !== characterId && (!session.participant_character_ids || !session.participant_character_ids.includes(characterId))) {
+        return { success: false, message: `Session #${sessionId} not found.` };
+    }
 
     session.title = cleanTitle.slice(0, 100);
     session.custom_title = true;
@@ -176,6 +182,13 @@ export function renameSession(sessionId, title, characterId = null, filePath = S
 
 export function deleteSession(sessionId, characterId = null, filePath = SESSIONS_FILE) {
     const store = readStore(filePath);
+    const target = store.sessions.find((s) => s.id === sessionId);
+    if (!target) {
+        return { success: false, message: `Session #${sessionId} not found.` };
+    }
+    if (characterId && target.character_id !== characterId && (!target.participant_character_ids || !target.participant_character_ids.includes(characterId))) {
+        return { success: false, message: `Session #${sessionId} not found.` };
+    }
     const initialLen = store.sessions.length;
     store.sessions = store.sessions.filter((s) => s.id !== sessionId);
 
@@ -189,6 +202,10 @@ export function deleteSession(sessionId, characterId = null, filePath = SESSIONS
 
 /**
  * Searches across session history for relevant past chat messages.
+ * Scoped per character: when `characterId` is provided only sessions owned
+ * by (or including) that character are searched. Passing null searches all
+ * characters (admin/debug use only) — all product call sites must pass the
+ * active character id to prevent cross-bot history leakage.
  */
 export function retrieveSessionContext(
     query,
@@ -197,6 +214,26 @@ export function retrieveSessionContext(
     characterId = null,
     filePath = SESSIONS_FILE
 ) {
+    // Allow (query, excludeSessionId, characterId) and options-object shapes.
+    if (excludeSessionId && typeof excludeSessionId === "object") {
+        const opts = excludeSessionId;
+        excludeSessionId = opts.excludeSessionId ?? null;
+        limit = opts.limit ?? MAX_RETRIEVED_MESSAGES;
+        characterId = opts.characterId ?? opts.character_id ?? characterId;
+        filePath = opts.filePath ?? SESSIONS_FILE;
+    } else if (typeof limit === "string") {
+        filePath = limit;
+        limit = MAX_RETRIEVED_MESSAGES;
+    } else if (limit && typeof limit === "object") {
+        const opts = limit;
+        limit = opts.limit ?? MAX_RETRIEVED_MESSAGES;
+        characterId = opts.characterId ?? opts.character_id ?? characterId;
+        filePath = opts.filePath ?? SESSIONS_FILE;
+    } else if (typeof characterId === "string" && characterId.endsWith(".json")) {
+        filePath = characterId;
+        characterId = null;
+    }
+    const scope = characterId ? String(characterId).trim() || null : null;
     if (!query || !query.trim()) return [];
 
     const queryWords = new Set(
@@ -209,7 +246,7 @@ export function retrieveSessionContext(
 
     for (const session of store.sessions) {
         if (excludeSessionId && session.id === excludeSessionId) continue;
-        if (characterId && session.character_id !== characterId) continue;
+        if (scope && session.character_id !== scope && !(session.participant_character_ids && session.participant_character_ids.includes(scope))) continue;
 
         for (const msg of session.messages || []) {
             if (msg.role !== "user" && msg.role !== "assistant") continue;
@@ -226,6 +263,7 @@ export function retrieveSessionContext(
                     score,
                     updated_at: session.updated_at || "",
                     session_title: session.title || "Previous conversation",
+                    character_id: session.character_id || null,
                     role: msg.role,
                     content,
                 });
@@ -237,7 +275,75 @@ export function retrieveSessionContext(
 
     return scored.slice(0, limit).map((item) => ({
         session_title: item.session_title,
+        character_id: item.character_id,
         role: item.role,
         content: item.content,
     }));
+}
+
+/**
+ * Async parallel variant: file read stays on main thread, word-overlap
+ * scoring fans out to worker_threads for large histories.
+ */
+export async function retrieveSessionContextParallel(
+    query,
+    excludeSessionId = null,
+    limit = MAX_RETRIEVED_MESSAGES,
+    characterId = null,
+    filePath = SESSIONS_FILE,
+    workerOptions = {}
+) {
+    if (excludeSessionId && typeof excludeSessionId === "object") {
+        const opts = excludeSessionId;
+        workerOptions = limit && typeof limit === "object" ? limit : {};
+        excludeSessionId = opts.excludeSessionId ?? null;
+        limit = opts.limit ?? MAX_RETRIEVED_MESSAGES;
+        characterId = opts.characterId ?? opts.character_id ?? characterId;
+        filePath = opts.filePath ?? SESSIONS_FILE;
+    } else if (typeof limit === "string") {
+        filePath = limit;
+        limit = MAX_RETRIEVED_MESSAGES;
+    } else if (limit && typeof limit === "object") {
+        const opts = limit;
+        workerOptions = opts.workerOptions || {};
+        limit = opts.limit ?? MAX_RETRIEVED_MESSAGES;
+        characterId = opts.characterId ?? opts.character_id ?? characterId;
+        filePath = opts.filePath ?? SESSIONS_FILE;
+    } else if (typeof characterId === "string" && characterId.endsWith(".json")) {
+        filePath = characterId;
+        characterId = null;
+    } else if (characterId && typeof characterId === "object") {
+        workerOptions = characterId;
+        characterId = workerOptions.characterId ?? workerOptions.character_id ?? null;
+    }
+    try {
+        const scope = characterId ? String(characterId).trim() || null : null;
+        if (!query || !query.trim()) return [];
+        const queryWords = Array.from(new Set(query.toLowerCase().match(/\w+/g) || []));
+        if (queryWords.length === 0) return [];
+        const store = readStore(filePath);
+        const flat = [];
+        for (const session of store.sessions) {
+            if (excludeSessionId && session.id === excludeSessionId) continue;
+            if (scope && session.character_id !== scope && !(session.participant_character_ids?.includes(scope))) continue;
+            for (const msg of session.messages || []) {
+                if (msg.role !== "user" && msg.role !== "assistant") continue;
+                flat.push({
+                    session_title: session.title || "Previous conversation",
+                    character_id: session.character_id || null,
+                    role: msg.role,
+                    content: String(msg.content || "").trim(),
+                    updated_at: session.updated_at || "",
+                });
+            }
+        }
+        const { scoreSessionMessagesScored } = await import("./utils/parallel_retrieval.js");
+        const scored = await scoreSessionMessagesScored(flat, queryWords, workerOptions);
+        scored.sort((a, b) => b.score - a.score || String(b.updated_at).localeCompare(String(a.updated_at)));
+        return scored.slice(0, limit).map(({ session_title, character_id, role, content }) => ({
+            session_title, character_id, role, content,
+        }));
+    } catch {
+        return retrieveSessionContext(query, excludeSessionId, limit, characterId, filePath);
+    }
 }
