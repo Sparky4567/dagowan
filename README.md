@@ -167,6 +167,12 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * Each simulation is just normal chat with the active persona and owns its own archive file in `data/simulations/<name>.json` (chats + memories stay separate from the global memory DB).
   * While idle, relevant past-simulation entries are recalled automatically when the prompt matches (`@simulation-search <query>` for manual search). Full transcript review via `@simulation-review <name>`. Works on CLI, Telegram, WhatsApp, and web voice.
 
+* **🪞 Daily Self-Reflections (`src/reflections.js`, separate bank in `data/reflections.json`)**:
+  * Run `@insight [optional focus]` and the active LLM writes today's reflection (3-6 bullets: what mattered, what it learned about the user, what to remember tomorrow, one thing to improve) — one entry per character per day (re-running the same day refreshes it). Falls back to a deterministic template when the LLM is unreachable, so the command never fails silently.
+  * Manage with `@insights [N]` (or `@insight-list`), `@insight-search <query>`, `@insight-show <id|YYYY-MM-DD>`, `@insight-delete <id|YYYY-MM-DD>`, `@insight-status`. Per-character scoped like memories; unit-tested in `src/reflections.test.js`.
+  * Later turns recall relevant reflections by association and inject them as `[Relevant Self-Reflections]` alongside memories/knowledge/sessions (`src/chat_context.js` + all chat pipelines), deepening existing knowledge over time.
+  * Lock-gated like any control command: needs `@otp-login` (+ `@unlock <pin>` when a PIN is set) on CLI, Telegram, WhatsApp, Web UI/voice, Dashboard, and Chrome side panel (via the shared Web bridge); regular chatting always works while locked.
+
 * **💾 Backup & Restore State**:
   * Export/import full application state, settings, memories, tasks, sessions, and simulations (`@export-settings`, `@import-settings`).
 
@@ -504,6 +510,12 @@ Inside the running application:
 * `@set-learning [on|off]` (or `@auto-learning`) — Toggle automatic background LLM learning extraction.
 * `@rules [status]` — Inspect candidate and approved pattern rules.
 * `@approve-rule <id>` — Approve a candidate rule.
+* `@insight [optional focus]` — Write today's daily self-reflection with the active LLM into `data/reflections.json` (one per character per day; lock-gated; works on CLI, Telegram, WhatsApp, Web, Dashboard).
+* `@insights [N]` (or `@insight-list`) — List recent self-reflections for the ACTIVE character.
+* `@insight-search <query>` — Search the reflection bank by association.
+* `@insight-show <id|YYYY-MM-DD>` — Show one reflection entry.
+* `@insight-delete <id|YYYY-MM-DD>` — Delete one reflection entry.
+* `@insight-status` — Show reflection count and latest entry for the active character.
 
 ### 🎭 Character Profiles & Personas
 * `@character [name|id]` — View or switch active character persona profile (wakes its Telegram polling on demand).

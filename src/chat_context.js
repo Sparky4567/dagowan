@@ -42,6 +42,8 @@ export async function retrieveChatContextParallel(queryText, {
     excludeSimulationSlug = null,
     language = null,
     crossLingual = true,
+    reflectionLimit = 3,
+    includeReflections = true,
 } = {}) {
     const q = queryText || "";
     // Active turn language drives memory scoping (explicit option wins,
@@ -53,7 +55,7 @@ export async function retrieveChatContextParallel(queryText, {
             if (det.code && det.code !== "und" && det.code !== "shared") activeLang = det.code;
         } catch {}
     }
-    const [memories, knowledge, pastContext, simulations] = await Promise.all([
+    const [memories, knowledge, pastContext, simulations, reflections] = await Promise.all([
         (async () => {
             try {
                 const { MemoryRetriever } = await import("./memory.js");
@@ -136,7 +138,18 @@ export async function retrieveChatContextParallel(queryText, {
                 return [];
             }
         })(),
+        (async () => {
+            // Daily self-reflection bank (only genuine token matches).
+            if (!includeReflections) return [];
+            try {
+                if (!q.trim()) return [];
+                const { searchReflections } = await import("./reflections.js");
+                return searchReflections(q, { characterId, limit: reflectionLimit });
+            } catch {
+                return [];
+            }
+        })(),
     ]);
     const bridgeHits = (memories || []).filter((m) => typeof m === "string" && m.includes("[via ")).length;
-    return { memories, knowledge, pastContext, simulations, language: activeLang, bridgeHits };
+    return { memories, knowledge, pastContext, simulations, reflections, language: activeLang, bridgeHits };
 }

@@ -317,12 +317,15 @@ const CONTROL_WORDS = new Set([
     "cast-device", "cast-devices", "set-cast-device", "mcp-status",
     "mcp-list", "mcp-tools", "mcp-call", "mcp-reconnect", "mcp-enable",
     "mcp-disable", "simulation", "simulations", "simulation-search",
-    "simulation-show", "simulation-review",
+    "simulation-show", "simulation-review", "insight", "insights",
+    "insight-search", "insight-show", "insight-list", "insight-delete",
+    "insight-status",
 ]);
 
 const CONTROL_PREFIXES = [
     "move-task-", "delete-task-", "simulation-", "blog-",
     "cast-", "mcp-", "needle-", "opencode-", "proactive-",
+    "insight-",
 ];
 
 export function isControlWord(text) {

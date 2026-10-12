@@ -406,6 +406,25 @@ export class WhatsAppBridgeServer {
             if (simCmd.handled) return simCmd.reply;
         }
 
+        // Daily self-reflections (@insight family; lock-gated above).
+        {
+            try {
+                const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
+                if (parseInsightCommand(trimmedPrompt)) {
+                    const { Ollama } = await import("ollama");
+                    let waOllama = null;
+                    try { waOllama = new Ollama({ host: this.settings.server_url }); } catch {}
+                    const res = await handleReflectionBridgeCommand(trimmedPrompt, {
+                        characterId: activeChar.id,
+                        personaName: activeChar.name,
+                        settings: this.settings,
+                        ollamaClient: waOllama,
+                    });
+                    if (res.handled) return res.reply;
+                }
+            } catch {}
+        }
+
         // Persona polling bridge commands (on-demand Telegram polling)
         if (lower === "/polling-status" || lower === "/polling" || lower === "/pollers") {
             const bridge = this.personaBridge;
@@ -931,6 +950,13 @@ export class WhatsAppBridgeServer {
         for (const block of simAugWa.blocks.slice(simActiveWa ? 1 : 0)) {
             modelMessages.push({ role: "system", content: block });
         }
+
+        // Daily self-reflections (association recall from data/reflections.json).
+        try {
+            const { getReflectionChatAugmentation } = await import("./reflections.js");
+            const refAug = getReflectionChatAugmentation(resolvedQuery, { characterId: character.id, limit: 3 });
+            if (refAug.block) modelMessages.push({ role: "system", content: refAug.block });
+        } catch {}
 
         const relevantKnowledge = retrieveKnowledge(resolvedQuery, 4);
         if (relevantKnowledge.length > 0) {

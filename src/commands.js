@@ -190,6 +190,11 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @set-learning [on|off] (or @auto-learning) — Toggle automatic background LLM learning extraction
 • @rules [status] — Inspect candidate and approved pattern rules
 • @approve-rule <id> — Approve a candidate rule
+• @insight [optional focus] — Write today's daily self-reflection with the active LLM (one per character per day) into data/reflections.json; recalled automatically as [Relevant Self-Reflections] in later chats
+• @insights [N] (or @insight-list) — List recent self-reflections for the ACTIVE character
+• @insight-search <query> — Search the reflection bank by association
+• @insight-show <id|YYYY-MM-DD> — Show one reflection entry
+• @insight-delete <id|YYYY-MM-DD> — Delete one reflection entry
 
 🎭 Character Profiles & Persona Commands:
 • @model [model-name] — View or switch active LLM model (supports Ollama, Gemini, Claude, Grok, ChatGPT)
@@ -483,6 +488,30 @@ export async function handleAtCommand({
                 const { deleteSimulation } = await import("./simulation.js");
                 const ok = deleteSimulation(simParsed.name);
                 console.log(ok ? `🗑 Simulation "${simParsed.name}" archive deleted.` : `⚠️ Simulation "${simParsed.name}" not found.`);
+                return { handled: true };
+            }
+        }
+    }
+
+    // ---- Daily self-reflections (@insight family; lock-gated like any control command) ----
+    {
+        const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
+        if (parseInsightCommand(rawInput)) {
+            let activeCharId = null;
+            let activeCharName = "";
+            try {
+                const ac = getActiveCharacter(context.characterStore);
+                activeCharId = ac.id;
+                activeCharName = ac.name;
+            } catch { activeCharId = context?.settings?.active_character || null; }
+            const res = await handleReflectionBridgeCommand(rawInput, {
+                characterId: activeCharId,
+                personaName: activeCharName,
+                settings: (context && context.settings) || {},
+                ollamaClient: ollamaClient || null,
+            });
+            if (res.handled) {
+                console.log(`\n${res.reply}\n`);
                 return { handled: true };
             }
         }

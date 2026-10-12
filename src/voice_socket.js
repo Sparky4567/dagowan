@@ -967,6 +967,26 @@ export class LocalVoiceSocketBridge {
                 }
             }
 
+            // Daily self-reflections (@insight family; lock-gated above).
+            {
+                try {
+                    const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
+                    if (parseInsightCommand(trimmedText)) {
+                        const res = await handleReflectionBridgeCommand(trimmedText, {
+                            characterId: activeChar.id,
+                            personaName: activeChar.name,
+                            settings: this.settings,
+                            ollamaClient: ollama,
+                        });
+                        if (res.handled) {
+                            this.send(ws, { event: "state_change", state: "idle" });
+                            this.send(ws, { event: "llm_complete", text: res.reply });
+                            return;
+                        }
+                    }
+                } catch {}
+            }
+
             this.send(ws, { event: "state_change", state: "thinking" });
 
             // Needle on-device fast-path: local-action turns skip the main
@@ -1026,6 +1046,11 @@ export class LocalVoiceSocketBridge {
                     content: `[Relevant Persistent Memories]:\n${relevantMemories.map((m) => `• ${m}`).join("\n")}`,
                 });
             }
+            try {
+                const { getReflectionChatAugmentation } = await import("./reflections.js");
+                const refAug = getReflectionChatAugmentation(trimmedText, { characterId: activeChar.id, limit: 3 });
+                if (refAug.block) modelMessages.push({ role: "system", content: refAug.block });
+            } catch {}
             for (const block of simAugWeb.blocks.slice(simActiveWeb ? 1 : 0)) {
                 modelMessages.push({ role: "system", content: block });
             }

@@ -71,6 +71,7 @@ export function dashboardHelpText(settings = {}) {
         `• @make <desc> / @create-file <path> [content] — local coding agent`,
         `• @opencli <task> / @opencode <task> / @opencode-setup — coding agents`,
         `• @simulation <name> / @simulation-end / @simulations — persona sub-chat`,
+        `• @insight [focus] / @insights / @insight-search <q> / @insight-show <id> — daily self-reflections (separate bank in data/reflections.json)`,
         `• @lock / @unlock <pin> / @security-status — security PIN (locks control commands, chat always works)`,
         `• @otp-set / @otp-login <code> / @otp-lock / @otp-status — OTP 2FA (needed before @unlock when enrolled)`,
         `• Security unlocks last ${unlockMinutes} minute(s) per surface (security_unlock_minutes).`,
@@ -410,6 +411,11 @@ export class DashboardServer {
                 content: `[Relevant Persistent Memories]:\n${relevantMemories.map((m) => `• ${m}`).join("\n")}`,
             });
         }
+        try {
+            const { getReflectionChatAugmentation } = await import("./reflections.js");
+            const refAug = getReflectionChatAugmentation(text, { characterId: activeCharId, limit: 3 });
+            if (refAug.block) modelMessages.push({ role: "system", content: refAug.block });
+        } catch {}
         for (const block of simBlocks.slice(simActive ? 1 : 0)) {
             modelMessages.push({ role: "system", content: block });
         }
@@ -907,6 +913,23 @@ export class DashboardServer {
                 chatId: String(session.id),
             });
             if (simCmd.handled) return simCmd.reply;
+        } catch {}
+
+        // ---- Daily self-reflections (@insight family; lock-gated by caller) ----
+        try {
+            const ref = await import("./reflections.js");
+            if (ref.parseInsightCommand(text)) {
+                const { Ollama } = await import("ollama");
+                let dashOllama = null;
+                try { dashOllama = new Ollama({ host: this.settings.server_url }); } catch {}
+                const res = await ref.handleReflectionBridgeCommand(text, {
+                    characterId: activeCharId,
+                    personaName: activeChar.name,
+                    settings: this.settings,
+                    ollamaClient: dashOllama,
+                });
+                if (res.handled) return res.reply;
+            }
         } catch {}
 
         // ---- Needle on-device fast-path (local-action turns skip the LLM) ----

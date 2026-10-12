@@ -369,6 +369,7 @@ async function main() {
         let relevantKnowledge = [];
         let pastContext = [];
         let simArchives = [];
+        let reflectionHits = [];
         let turnLanguage = null;
         let bridgeHits = 0;
         try {
@@ -380,11 +381,13 @@ async function main() {
                 sessionLimit: 3,
                 simulationLimit: 3,
                 excludeSimulationSlug: activeSim?.slug || null,
+                reflectionLimit: 3,
             });
             relevantMemories = ctx.memories;
             relevantKnowledge = ctx.knowledge;
             pastContext = ctx.pastContext;
             simArchives = ctx.simulations || [];
+            reflectionHits = ctx.reflections || [];
             turnLanguage = ctx.language || null;
             bridgeHits = ctx.bridgeHits || 0;
         } catch {
@@ -426,6 +429,15 @@ async function main() {
                 role: "system",
                 content: formatSimulationArchiveBlock(simArchives),
             });
+        }
+
+        // 2d. Daily self-reflections (own past insights, association recall).
+        if (reflectionHits.length > 0) {
+            try {
+                const { formatReflectionBlock } = await import("./src/reflections.js");
+                const block = formatReflectionBlock(reflectionHits);
+                if (block) modelMessages.push({ role: "system", content: block });
+            } catch {}
         }
 
         // 3. Retrieve relevant knowledge base concepts matching query

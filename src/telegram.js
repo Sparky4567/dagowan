@@ -292,6 +292,28 @@ export class TelegramBotRunner {
             }
         }
 
+        // Daily self-reflections (@insight family; lock-gated above).
+        {
+            try {
+                const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
+                if (parseInsightCommand(msgText)) {
+                    const { Ollama } = await import("ollama");
+                    let tgOllama = null;
+                    try { tgOllama = new Ollama({ host: this.settings.server_url }); } catch {}
+                    const res = await handleReflectionBridgeCommand(msgText, {
+                        characterId: activeChar.id,
+                        personaName: activeChar.name,
+                        settings: this.settings,
+                        ollamaClient: tgOllama,
+                    });
+                    if (res.handled) {
+                        await this.sendMessage(chatId, res.reply);
+                        return;
+                    }
+                }
+            } catch {}
+        }
+
         // Persona polling bridge commands (on-demand Telegram polling)
         if (lower === "/polling-status" || lower === "/polling" || lower === "/pollers") {
             const bridge = this.personaBridge;
@@ -864,6 +886,13 @@ export class TelegramBotRunner {
         for (const block of simAug.blocks.slice(simActive ? 1 : 0)) {
             modelMessages.push({ role: "system", content: block });
         }
+
+        // Daily self-reflections (association recall from data/reflections.json).
+        try {
+            const { getReflectionChatAugmentation } = await import("./reflections.js");
+            const refAug = getReflectionChatAugmentation(queryText, { characterId: activeChar.id, limit: 3 });
+            if (refAug.block) modelMessages.push({ role: "system", content: refAug.block });
+        } catch {}
 
         // Relevant knowledge base
         const relevantKnowledge = retrieveKnowledge(queryText, 4);
