@@ -134,6 +134,7 @@ import {
 } from "./security.js";
 
 let globalVoiceBridge = null;
+let globalDashboardServer = null;
 
 // Dynamic command manual: the unlock/OTP duration lines are generated from
 // the live `security_unlock_minutes` value (app_settings.json) instead of a
@@ -146,6 +147,7 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @tts <text> — Synthesize text locally into speech audio (MMS-TTS)
 • @voice-reply [on|off] (or @voicereply) — Toggle automatic local voice note response generation (saved to app_settings.json)
 • @web [on|off] (or @voice-socket, @voice-server, @dagowan) — Launch/toggle real-time duplex voice web interface (http://127.0.0.1:8767)
+• @dashboard [on|off] [port] (or @dash) — Launch/toggle OpenWebUI-style chat dashboard (http://127.0.0.1:8768; custom port via @dashboard 8899, DASHBOARD_PORT, or --dashboard-port N)
 • @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N] (or @websearch) — Live web search injected into the next LLM answer (works for ALL cloud models: OpenAI/Gemini/Claude/Grok + local Ollama). Inline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")
 • @web-fetch <url> (or @webfetch) — Fetch a page as plain text (read a search result in full)
 • @web-status — Show web search engine configuration
@@ -2107,6 +2109,43 @@ export async function handleAtCommand({
             }
             console.log("🌐 Voice web server enabled status saved to app_settings.json.");
         }
+        return { handled: true };
+    }
+
+    // OpenWebUI-style Dashboard - @dashboard [on|off] [port] (alias @dash)
+    if (lower === "/dashboard" || lower.startsWith("/dashboard ") || lower === "/dash" || lower.startsWith("/dash ")) {
+        const parts = input.split(/\s+/);
+        const rest = parts.slice(1);
+        const flag = rest[0] ? rest[0].toLowerCase() : null;
+        if (flag && ["off", "disable", "disabled", "false", "0", "stop"].includes(flag)) {
+            if (globalDashboardServer) {
+                globalDashboardServer.stop();
+                globalDashboardServer = null;
+            }
+            context.settings.dashboard_enabled = false;
+            saveSettings(context.settings);
+            console.log("📊 Dashboard stopped and disabled in app_settings.json.");
+            return { handled: true };
+        }
+        let port = Number(process.env.DASHBOARD_PORT || context.settings.dashboard_port || 8768);
+        for (const token of rest) {
+            const n = Number(token);
+            if (Number.isFinite(n) && n > 0 && n < 65536) {
+                port = n;
+                break;
+            }
+        }
+        context.settings.dashboard_enabled = true;
+        context.settings.dashboard_port = port;
+        saveSettings(context.settings);
+        if (!globalDashboardServer) {
+            const { DashboardServer } = await import("./dashboard.js");
+            globalDashboardServer = new DashboardServer({ settings: context.settings, characterStore: context.characterStore });
+            globalDashboardServer.start(port);
+        } else {
+            console.log(`📊 Dashboard is already running on http://127.0.0.1:${globalDashboardServer.port || port}`);
+        }
+        console.log("📊 Dashboard enabled status saved to app_settings.json.");
         return { handled: true };
     }
 

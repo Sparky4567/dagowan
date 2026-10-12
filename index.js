@@ -32,6 +32,7 @@ import { WhatsAppBridgeServer, shouldStartWhatsApp } from "./src/whatsapp.js";
 import { unifiedChat } from "./src/providers.js";
 import { synthesizeSpeechLocal } from "./src/audio.js";
 import { LocalVoiceSocketBridge } from "./src/voice_socket.js";
+import { DashboardServer, shouldStartDashboard, resolveDashboardPort } from "./src/dashboard.js";
 import { ProactiveChatManager } from "./src/proactive.js";
 import { initializeSharedModel, getSharedModel, setSharedModel } from "./src/model_selection.js";
 import { tryNeedleFastPath, stopNeedleDaemon } from "./src/needle.js";
@@ -182,6 +183,18 @@ async function main() {
         console.log("🌐 Dagowan Voice Web Bridge: Disabled (Launch with --web or @web)");
     }
 
+    let dashboardServer = null;
+    const dashDecision = shouldStartDashboard(settings, process.argv, process.env);
+    if (dashDecision.start) {
+        const dashPort = resolveDashboardPort(settings, process.argv, process.env);
+        dashboardServer = new DashboardServer({ settings, characterStore });
+        dashboardServer.start(dashPort);
+    } else if (dashDecision.reason === "disabled-flag" || dashDecision.reason === "disabled-env") {
+        console.log("📊 Dashboard: Disabled");
+    } else {
+        console.log("📊 Dashboard: Disabled (Launch with --dashboard or -dashboard, port 8768 by default)");
+    }
+
     console.log("-------------------------------------------------------");
     console.log("Type @help to view all @ commands & options.");
     console.log("=======================================================\n");
@@ -222,6 +235,8 @@ async function main() {
             try { stopMcpManager(); } catch {}
             await personaBridge.stopAll();
             if (waServer) waServer.stop();
+            if (voiceBridge) voiceBridge.stop();
+            if (dashboardServer) dashboardServer.stop();
             console.log("👋 Session saved. Goodbye!");
             rl.close();
             process.exit(0);

@@ -39,7 +39,7 @@ else
 fi
 
 # Map env -> app_settings.json without wiping user-tuned values stored in the volume.
-if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${CLAUDE_API_KEY:-}" ] || [ -n "${GROK_API_KEY:-}" ] || [ -n "${WHATSAPP_PHONE:-}" ] || [ -n "${WHATSAPP_ENABLED:-}" ] || [ -n "${WEB_ENABLED:-}" ] || [ -n "${WHATSAPP_QR_MODE:-}" ] || [ -n "${WHATSAPP_QR:-}" ] || [ -n "${TELEGRAM_TOKEN:-}" ] || [ -n "${NEEDLE_ENABLED:-}" ] || [ -n "${NEEDLE_MIN_CONFIDENCE:-}" ] || [ -n "${NEEDLE_MODEL_PATH:-}" ] || [ -n "${NEEDLE_PYTHON:-}" ] || [ -n "${NEEDLE_DAEMON_IDLE_MS:-}" ] || [ -n "${OPENCLI_ENABLED:-}" ] || [ -n "${OPENCLI_MODEL:-}" ] || [ -n "${OPENCLI_MAX_ITERATIONS:-}" ] || [ -n "${OPENCLI_ALLOWED_CHATS:-}" ] || [ -n "${CAST_DEVICE_NAME:-}" ] || [ -n "${CAST_DEVICE_HOST:-}" ] || [ -n "${CAST_DEVICE_TYPE:-}" ] || [ -n "${CAST_PORT:-}" ] || [ -n "${CAST_TRANSCODE:-}" ] || [ -n "${CAST_MAX_HEIGHT:-}" ]; then
+if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${CLAUDE_API_KEY:-}" ] || [ -n "${GROK_API_KEY:-}" ] || [ -n "${WHATSAPP_PHONE:-}" ] || [ -n "${WHATSAPP_ENABLED:-}" ] || [ -n "${WEB_ENABLED:-}" ] || [ -n "${DASHBOARD_ENABLED:-}" ] || [ -n "${DASHBOARD_PORT:-}" ] || [ -n "${WHATSAPP_QR_MODE:-}" ] || [ -n "${WHATSAPP_QR:-}" ] || [ -n "${TELEGRAM_TOKEN:-}" ] || [ -n "${NEEDLE_ENABLED:-}" ] || [ -n "${NEEDLE_MIN_CONFIDENCE:-}" ] || [ -n "${NEEDLE_MODEL_PATH:-}" ] || [ -n "${NEEDLE_PYTHON:-}" ] || [ -n "${NEEDLE_DAEMON_IDLE_MS:-}" ] || [ -n "${OPENCLI_ENABLED:-}" ] || [ -n "${OPENCLI_MODEL:-}" ] || [ -n "${OPENCLI_MAX_ITERATIONS:-}" ] || [ -n "${OPENCLI_ALLOWED_CHATS:-}" ] || [ -n "${CAST_DEVICE_NAME:-}" ] || [ -n "${CAST_DEVICE_HOST:-}" ] || [ -n "${CAST_DEVICE_TYPE:-}" ] || [ -n "${CAST_PORT:-}" ] || [ -n "${CAST_TRANSCODE:-}" ] || [ -n "${CAST_MAX_HEIGHT:-}" ]; then
   bun -e '
     const fs = require("node:fs");
     const p = "app_settings.json";
@@ -58,6 +58,9 @@ if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_K
     if (env.WHATSAPP_ENABLED === "1" || env.WHATSAPP_ENABLED === "true") s.whatsapp_enabled = true;
     if (env.WEB_ENABLED === "0" || env.WEB_ENABLED === "false") { s.web_enabled = false; s.voice_server_enabled = false; }
     if (env.WEB_ENABLED === "1" || env.WEB_ENABLED === "true") { s.web_enabled = true; s.voice_server_enabled = true; }
+    if (env.DASHBOARD_ENABLED === "0" || env.DASHBOARD_ENABLED === "false") s.dashboard_enabled = false;
+    if (env.DASHBOARD_ENABLED === "1" || env.DASHBOARD_ENABLED === "true") s.dashboard_enabled = true;
+    if (env.DASHBOARD_PORT) { const n = Number(env.DASHBOARD_PORT); if (Number.isFinite(n)) s.dashboard_port = n; }
     if (env.NEEDLE_ENABLED === "0" || env.NEEDLE_ENABLED === "false") s.needle_enabled = false;
     if (env.NEEDLE_ENABLED === "1" || env.NEEDLE_ENABLED === "true") s.needle_enabled = true;
     if (env.NEEDLE_MIN_CONFIDENCE) { const n = Number(env.NEEDLE_MIN_CONFIDENCE); if (Number.isFinite(n)) s.needle_min_confidence = n; }

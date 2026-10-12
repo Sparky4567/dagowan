@@ -18,6 +18,8 @@ services:
       WHATSAPP_STATUS_PORT: "${WHATSAPP_STATUS_PORT:-8766}"
       VOICE_PORT: "${VOICE_PORT:-8767}"
       WEB_PORT: "${WEB_PORT:-8767}"
+      DASHBOARD_PORT: "${DASHBOARD_PORT:-8768}"
+      DASHBOARD_ENABLED: "${DASHBOARD_ENABLED:-}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       CLAUDE_API_KEY: "${CLAUDE_API_KEY:-}"
@@ -43,6 +45,7 @@ services:
       - "${WHATSAPP_PORT:-8765}:8765" # WhatsApp HTTP bridge (/chat, /health)
       - "${WHATSAPP_STATUS_PORT:-8766}:8766" # WhatsApp QR / pairing view
       - "${VOICE_PORT:-8767}:8767" # Dagowan voice Web UI + WebSocket
+      - "${DASHBOARD_PORT:-8768}:8768" # OpenWebUI-style dashboard (/ + /api/*)
       - "${CAST_PORT:-8901}:8901" # TV cast relay (/stream; used with pinned IPs even without host mode)
       # - "11434:11434" # uncomment only if you publish a host Ollama into the container network
     volumes:

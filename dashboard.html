@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dagowan Dashboard — OpenWebUI-style Chat</title>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#131722; --panel2:#171c2b; --border:rgba(255,255,255,.08);
+  --accent:#00f0ff; --accent2:#7b2cbf; --text:#eef2ff; --muted:#94a3b8;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{background:radial-gradient(circle at 30% 10%,#151a2e 0%,var(--bg) 60%);color:var(--text);min-height:100vh;display:flex}
+aside{width:300px;min-width:300px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh}
+aside header{padding:14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand{font-weight:700;font-size:15px}
+.brand small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.side-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:14px}
+.side-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.session-item{padding:9px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer;background:var(--panel2)}
+.session-item:hover{border-color:var(--accent)}
+.session-item.active{border-color:var(--accent);box-shadow:0 0 12px rgba(0,240,255,.25)}
+.session-item .t{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-item .m{font-size:11px;color:var(--muted)}
+.btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),#0072ff);color:#001318;border:none}
+.btn.danger{border-color:rgba(255,80,80,.4)}
+.row{display:flex;gap:8px}
+select,input[type=text],input[type=number]{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:#0d111c;color:var(--text);font-size:13px;outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+main{flex:1;display:flex;flex-direction:column;height:100vh;min-width:0}
+main header{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;background:rgba(19,23,34,.8);backdrop-filter:blur(10px)}
+main header .spacer{flex:1}
+.badge{font-size:12px;color:var(--accent);border:1px solid rgba(0,240,255,.3);border-radius:20px;padding:5px 12px;background:rgba(0,240,255,.08)}
+#messages{flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:14px;max-width:900px;width:100%;margin:0 auto}
+.bubble{max-width:85%;padding:12px 16px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.bubble.user{align-self:flex-end;background:linear-gradient(135deg,rgba(0,240,255,.22),rgba(0,114,255,.22));border:1px solid rgba(0,240,255,.3);border-bottom-right-radius:4px}
+.bubble.assistant{align-self:flex-start;background:rgba(255,255,255,.05);border:1px solid var(--border);border-bottom-left-radius:4px}
+.bubble .meta{font-size:11px;color:var(--muted);margin-bottom:6px}
+#composer{padding:14px 18px;border-top:1px solid var(--border);background:var(--panel)}
+#composer .wrap{max-width:900px;margin:0 auto;display:flex;gap:10px}
+#composer input{flex:1;padding:13px 18px;border-radius:24px;font-size:15px}
+.hint{max-width:900px;margin:8px auto 0;font-size:12px;color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:50}
+.modal.active{display:flex}
+.card{width:92%;max-width:560px;background:var(--panel);border:1px solid rgba(0,240,255,.3);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto}
+.card h3{color:var(--accent)}
+label{font-size:12px;color:var(--muted);font-weight:600}
+@media(max-width:860px){aside{display:none}aside.open{display:flex;position:fixed;z-index:40;height:100vh}}
+</style>
+</head>
+<body>
+<aside id="sidebar">
+  <header>
+    <div class="logo">📊</div>
+    <div class="brand">Dagowan Dashboard<small>OpenWebUI-style • local</small></div>
+  </header>
+  <div class="side-body">
+    <div class="row">
+      <button class="btn primary" id="newChatBtn" style="flex:1">＋ New chat</button>
+      <button class="btn" id="menuCloseBtn" title="Close">✖</button>
+    </div>
+    <div class="side-section">
+      <h4>Model</h4>
+      <select id="modelSelect"><option>loading…</option></select>
+      <div class="hint" id="providerHint" style="margin:6px 0 0"></div>
+    </div>
+    <div class="side-section">
+      <h4>Persona</h4>
+      <select id="charSelect"><option>loading…</option></select>
+    </div>
+    <div class="side-section">
+      <h4>Chats</h4>
+      <input type="text" id="sessionSearch" placeholder="Search chats…" style="margin-bottom:8px" />
+      <div id="sessionList"></div>
+    </div>
+    <div class="side-section">
+      <h4>Quick tools</h4>
+      <div class="row" style="flex-wrap:wrap">
+        <button class="btn" data-cmd="@stats">📊 @stats</button>
+        <button class="btn" data-cmd="@models">🤖 @models</button>
+        <button class="btn" data-cmd="@get-tasks">📋 tasks</button>
+        <button class="btn" data-cmd="@play ">▶ @play</button>
+        <button class="btn" data-cmd="@spotify-play ">🎧 @spotify</button>
+        <button class="btn" data-cmd="@blog ">✍️ @blog</button>
+        <button class="btn" data-cmd="@fact-check ">🔍 @fact-check</button>
+        <button class="btn" data-cmd="@lock">🔒 @lock</button>
+        <button class="btn" data-cmd="@security-status">🛡 status</button>
+        <button class="btn" data-cmd="@help">📜 @help</button>
+      </div>
+    </div>
+    <div class="side-section">
+      <h4>Links</h4>
+      <div class="row">
+        <a class="btn" id="voiceLink" href="http://127.0.0.1:8767" target="_blank" rel="noopener" style="text-decoration:none">🎙 Voice UI</a>
+        <button class="btn" id="settingsBtn">⚙️ Settings</button>
+      </div>
+    </div>
+  </div>
+</aside>
+<main>
+  <header>
+    <button class="btn" id="menuBtn">☰</button>
+    <div class="logo">📊</div>
+    <div><b id="chatTitle">New conversation</b><div id="chatSub" style="font-size:12px;color:var(--muted)">pick a model + persona, then chat</div></div>
+    <div class="spacer"></div>
+    <div class="badge" id="lockBadge" title="Security lock state">🔓 unlocked</div>
+    <div class="badge" id="healthBadge">connecting…</div>
+  </header>
+  <div id="messages"></div>
+  <div id="composer">
+    <div class="wrap">
+      <input type="text" id="input" placeholder="Send a message… (try @help, @play, @lock …)" autocomplete="off" />
+      <button class="btn primary" id="sendBtn">Send ➤</button>
+    </div>
+    <div class="hint">Enter ↵ to send • <b>@help</b> lists commands • <b>@play …</b> YouTube • <b>@remember …</b> saves memory • <b>@lock / @unlock &lt;pin&gt;</b> security • live web search: add <b>@live-web</b> in a sentence</div>
+  </div>
+</main>
+<div class="modal" id="settingsModal">
+  <div class="card">
+    <h3>⚙️ Dashboard settings</h3>
+    <label>Ollama server URL</label><input type="text" id="setServerUrl" />
+    <label>Default model</label><input type="text" id="setModel" />
+    <label>Memory window (mem_limit)</label><input type="number" id="setMemLimit" min="1" max="100" />
+    <label>Active character</label><input type="text" id="setCharacter" disabled />
+    <div class="row"><button class="btn" id="closeSettingsBtn" style="flex:1">Close</button><button class="btn primary" id="saveSettingsBtn" style="flex:1">💾 Save</button></div>
+    <div class="hint">Only safe fields are writable via API (model, server_url, mem_limit, …). Keys stay in Engine Settings / @set-api-key.</div>
+  </div>
+</div>
+<script>
+let state={sessions:[],activeSessionId:null,characterId:null,model:null,sending:false};
+const $=id=>document.getElementById(id);
+function bubble(role,text,meta){
+  const d=document.createElement('div');d.className='bubble '+role;
+  if(meta){const m=document.createElement('div');m.className='meta';m.textContent=meta;d.appendChild(m);}
+  const b=document.createElement('div');b.textContent=text;d.appendChild(b);
+  $('messages').appendChild(d);$('messages').scrollTop=$('messages').scrollHeight;
+}
+async function api(p,o={}){
+  const r=await fetch(p,{headers:{'Content-Type':'application/json'},...o});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+async function refreshHealth(){
+  try{const h=await api('/api/health');$('healthBadge').textContent='● '+h.model;$('chatSub').textContent='persona '+h.character+' • '+h.model;}
+  catch{$('healthBadge').textContent='○ offline';}
+  try{
+    const s=await api('/api/security-status');
+    const b=$('lockBadge');
+    if(b){b.textContent=s.locked?'🔒 locked':'🔓 unlocked';b.title='scope '+s.scope+' • pin '+(s.pinSet?'set':'unset')+' • otp '+(s.otpSet?(s.otpAuthenticated?'authed':'login needed'):'off');}
+  }catch{}
+}
+async function refreshModels(){
+  try{
+    const j=await api('/api/models');
+    const sel=$('modelSelect');sel.innerHTML='';
+    const groups=[['Local Ollama',j.ollama.length?j.ollama:['(daemon offline)']],['OpenAI',j.cloud.openai],['Gemini',j.cloud.gemini],['Claude',j.cloud.claude],['Grok',j.cloud.grok]];
+    for(const [g,ms] of groups){const og=document.createElement('optgroup');og.label=g;for(const m of ms){const o=document.createElement('option');o.value=m;o.textContent=m+(m===j.active?' ★':'');if(m===j.active)o.selected=true;og.appendChild(o);}sel.appendChild(og);}
+    state.model=j.active;
+    $('providerHint').textContent='keys: openai '+(j.providers.openai?'✓':'×')+' • gemini '+(j.providers.gemini?'✓':'×')+' • claude '+(j.providers.claude?'✓':'×')+' • grok '+(j.providers.grok?'✓':'×');
+  }catch{}
+}
+async function refreshCharacters(){
+  try{
+    const j=await api('/api/characters');
+    const sel=$('charSelect');sel.innerHTML='';
+    for(const c of j.characters){const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.active?' ★':'');if(c.active)o.selected=true;sel.appendChild(o);}
+    state.characterId=j.active;
+  }catch{}
+}
+async function refreshSessions(){
+  try{
+    const q=state.characterId?('?characterId='+encodeURIComponent(state.characterId)):'';
+    const j=await api('/api/sessions'+q);
+    state.sessions=j.sessions||[];
+    renderSessions();
+    if(!state.activeSessionId&&state.sessions.length){selectSession(state.sessions[0].id,true);}
+  }catch{}
+}
+function renderSessions(){
+  const f=($('sessionSearch').value||'').toLowerCase();
+  const box=$('sessionList');box.innerHTML='';
+  for(const s of state.sessions){
+    if(f&&!(s.title||'').toLowerCase().includes(f))continue;
+    const d=document.createElement('div');d.className='session-item'+(s.id===state.activeSessionId?' active':'');
+    d.innerHTML='<div class="t"></div><div class="m"></div>';
+    d.querySelector('.t').textContent=s.title||'(untitled)';
+    d.querySelector('.m').textContent=(s.messages||[]).length+' msgs • '+(s.updated_at||'').slice(0,16).replace('T',' ');
+    d.onclick=()=>selectSession(s.id);
+    box.appendChild(d);
+  }
+  if(!box.children.length){box.innerHTML='<div style="font-size:12px;color:var(--muted)">No chats yet — start one below.</div>';}
+}
+async function selectSession(id,silent){
+  state.activeSessionId=id;
+  renderSessions();
+  if(silent&&!id)return;
+  try{
+    const j=await api('/api/sessions/'+encodeURIComponent(id)+(state.characterId?('?characterId='+encodeURIComponent(state.characterId)):''));
+    $('messages').innerHTML='';
+    $('chatTitle').textContent=j.session.title||'Conversation';
+    for(const m of (j.session.messages||[]).slice(-50)){
+      if(m.role==='user')bubble('user',m.content,'you');
+      else if(m.role==='assistant')bubble('assistant',m.content,'assistant');
+    }
+    if(!(j.session.messages||[]).length)bubble('assistant','👋 Hello! Ask anything, or try @help for commands.','assistant');
+  }catch(e){bubble('assistant','⚠️ '+e.message,'error');}
+}
+async function newChat(){
+  try{
+    const j=await api('/api/sessions',{method:'POST',body:JSON.stringify({characterId:state.characterId})});
+    await refreshSessions();await selectSession(j.session.id);
+  }catch(e){bubble('assistant','⚠️ '+e.message,'error');}
+}
+async function send(){
+  const t=$('input').value.trim();
+  if(!t||state.sending)return;
+  state.sending=true;$('input').value='';
+  bubble('user',t,'you');
+  const thinking=document.createElement('div');thinking.className='bubble assistant';thinking.textContent='… thinking';$('messages').appendChild(thinking);$('messages').scrollTop=$('messages').scrollHeight;
+  try{
+    const j=await api('/api/chat',{method:'POST',body:JSON.stringify({message:t,sessionId:state.activeSessionId,characterId:state.characterId})});
+    thinking.remove();
+    bubble('assistant',j.reply,'assistant'+(j.command?' • command':''));
+    state.activeSessionId=j.sessionId;
+    await refreshSessions();refreshHealth();
+  }catch(e){thinking.remove();bubble('assistant','⚠️ '+(e.message||e),'error');}
+  finally{state.sending=false;}
+}
+$('sendBtn').onclick=send;
+$('input').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+$('newChatBtn').onclick=newChat;
+$('sessionSearch').oninput=renderSessions;
+$('menuBtn').onclick=()=>$('sidebar').classList.add('open');
+$('menuCloseBtn').onclick=()=>$('sidebar').classList.remove('open');
+$('modelSelect').onchange=async e=>{try{await api('/api/model',{method:'POST',body:JSON.stringify({model:e.target.value})});state.model=e.target.value;refreshHealth();}catch(err){alert(err.message);}};
+$('charSelect').onchange=async e=>{try{await api('/api/characters/switch',{method:'POST',body:JSON.stringify({id:e.target.value})});state.characterId=e.target.value;state.activeSessionId=null;$('messages').innerHTML='';await refreshSessions();refreshHealth();}catch(err){alert(err.message);}};
+document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>{$('input').value=b.dataset.cmd+' ';$('input').focus();});
+$('settingsBtn').onclick=async()=>{try{const j=await api('/api/settings');$('setServerUrl').value=j.settings.server_url||'';$('setModel').value=j.settings.model||'';$('setMemLimit').value=j.settings.mem_limit||10;$('setCharacter').value=j.settings.active_character||'';}catch{};$('settingsModal').classList.add('active');};
+$('closeSettingsBtn').onclick=()=>$('settingsModal').classList.remove('active');
+$('saveSettingsBtn').onclick=async()=>{
+  try{
+    await api('/api/settings',{method:'POST',body:JSON.stringify({settings:{server_url:$('setServerUrl').value.trim(),model:$('setModel').value.trim(),mem_limit:Number($('setMemLimit').value)||10}})});
+    $('settingsModal').classList.remove('active');refreshModels();refreshHealth();
+  }catch(e){alert(e.message);}
+};
+try{$('voiceLink').href='http://'+location.hostname+':8767';}catch{}
+(async()=>{bubble('assistant','👋 Welcome to the Dagowan Dashboard — an OpenWebUI-style chat for this project.','assistant');await refreshHealth();await refreshModels();await refreshCharacters();await refreshSessions();})();
+setInterval(refreshHealth,30000);
+</script>
+</body>
+</html>

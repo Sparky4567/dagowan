@@ -42,6 +42,8 @@ export const DEFAULT_SETTINGS = {
     persona_polling_sweep_seconds: 60,
     web_enabled: false,
     voice_server_enabled: false,
+    dashboard_enabled: false,
+    dashboard_port: 8768,
     auto_learning_enabled: true,
     learning_model: "",
     knowledge_enabled: true,

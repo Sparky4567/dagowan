@@ -19,6 +19,7 @@
     "patch:check": "bun run patch_onnx.js --check",
     "start": "bun run patch_onnx.js && bun run index.js",
     "web": "bun run patch_onnx.js && bun run index.js --web",
+    "dashboard": "bun run patch_onnx.js && bun run index.js --dashboard",
     "babyagi": "bun run babyagi.ts",
     "test": "bun test"
   },

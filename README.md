@@ -1,6 +1,6 @@
 # Ollama & Multi-Provider AI Assistant Toolsuite (Bun)
 
-An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cloud multi-provider LLM support (**Ollama**, **Google Gemini**, **Anthropic Claude**, **xAI Grok**, **OpenAI ChatGPT**), 100% offline local voice processing (**STT Speech-to-Text & TTS Text-to-Speech**), pure JavaScript Markdown/PDF conversion tools, persistent memory management, Kanban task board, custom character profiles, chat session management, agentic web tools, **Telegram & WhatsApp Bridges**, and the **Ollama CLI Autonomous Coding Engine**!
+An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cloud multi-provider LLM support (**Ollama**, **Google Gemini**, **Anthropic Claude**, **xAI Grok**, **OpenAI ChatGPT**), 100% offline local voice processing (**STT Speech-to-Text & TTS Text-to-Speech**), pure JavaScript Markdown/PDF conversion tools, persistent memory management, Kanban task board, custom character profiles, chat session management, agentic web tools, **Telegram & WhatsApp Bridges**, **OpenWebUI-style Dashboard**, and the **Ollama CLI Autonomous Coding Engine**!
 
 ---
 
@@ -288,6 +288,16 @@ starter.bat --web
   ```
   Then open **`http://127.0.0.1:8767`** in your browser.
   The web bridge supports typed prompts, browser-recorded audio, local/OpenAI transcription, and speech replies. `bun test` includes a no-network integration check for all three paths.
+* **OpenWebUI-Style Dashboard (`src/dashboard.js` + `dashboard.html`)**:
+  ```bash
+  ./starter.sh --dashboard   # single-dash -dashboard works too
+  # or:
+  bun run dashboard
+  # custom port:
+  ./starter.sh --dashboard-port 8899   # or DASHBOARD_PORT=8899
+  ```
+  Then open **`http://127.0.0.1:8768`** in your browser.
+  Sidebar chat list, model + persona pickers, quick `@` tools, settings panel, and a REST API (`/api/health`, `/api/chat`, `/api/sessions`, `/api/characters`, `/api/memories`, `/api/tasks`, `/api/stats`, `/api/settings`, `/api/models`, `/api/commands`). Chat turns reuse the normal memory + knowledge + session-context LLM flow. Toggle from inside the app with `@dashboard [port]` / `@dashboard off` (`@dash` alias). Shares the `web` PIN/OTP lock scope with the voice UI (`@lock` / `@unlock`, mutating REST endpoints return `423` while locked). Env: `DASHBOARD_ENABLED=1` to autostart, `DASHBOARD_PORT` for the port (settings: `dashboard_enabled`, `dashboard_port` in `app_settings.json`). Unit-tested (`src/dashboard.test.js`, no network).
 * **With WhatsApp Bridge** (opt-in; stays off unless a phone is linked or it is enabled):
   ```bash
   ./starter.sh --whatsapp
@@ -315,6 +325,7 @@ Ship the whole toolsuite as a portable container with `Dockerfile` + `docker-com
 | `8765` | `http://127.0.0.1:8765` | WhatsApp HTTP bridge (`/chat`, `/health`) |
 | `8766` | `http://127.0.0.1:8766` | WhatsApp QR / pairing view (`/qr`) |
 | `8767` | `http://127.0.0.1:8767` | Dagowan voice Web UI + WebSocket (`/ws`) |
+| `8768` | `http://127.0.0.1:8768` | OpenWebUI-style dashboard (`/` + `/api/*`, opt-in via `DASHBOARD_ENABLED=1` / `--dashboard`) |
 
 ### Prerequisites
 * Docker 24+ with the Compose v2 plugin (`docker compose version`).
@@ -412,6 +423,7 @@ Inside the running application:
 
 ### 🎙 Local Voice & Audio Commands (Offline)
 * `@web` (or `@voice-socket`, `@voice-server`, `@dagowan`) — Launch/toggle real-time duplex voice web interface (`http://127.0.0.1:8767`). Voice-only; live web search uses `@live-web` / `@web-search` (see 🌐 Live Web Search below).
+* `@dashboard [port]` / `@dashboard off` (or `@dash`) — Launch/toggle OpenWebUI-style chat dashboard (`http://127.0.0.1:8768`; custom port via `@dashboard 8899`, `DASHBOARD_PORT`, or `--dashboard-port N`).
 * `@voice <audio_file_path>` — Transcribe audio file locally (Whisper STT), process question with LLM, and synthesize response.
 * `@tts <text>` — Synthesize text locally into a speech `.wav` file using local MMS-TTS model.
 * `@voice-reply [on|off]` (or `@voicereply`) — Toggle automatic local voice note response generation for answers.
@@ -633,6 +645,7 @@ The Blogger API needs a user OAuth token — no client-credentials flow exists. 
 │   └── bot.db                # SQLite database for persistent memories, knowledge, and learning logs
 ├── whatsapp_qr.html          # Web view for WhatsApp QR code & pairing
 ├── voice_interface.html      # Dagowan real-time voice web UI (security panel + commands browser)
+├── dashboard.html            # OpenWebUI-style dashboard UI (sidebar chats, model/persona pickers, settings panel → src/dashboard.js)
 ├── chrome-extension/         # MV3 companion sidebar widget v1.1.1 (chat + locks/unlocks + Ask-Dagowan context menu)
 │   ├── manifest.json         # MV3 manifest (side panel + popup fallback + service worker, 127.0.0.1:8767 host perms)
 │   ├── sidepanel.html / sidepanel.js # Sidebar widget: full-height WS client (text_prompt → llm_complete), lock badge, PIN/OTP inputs
@@ -673,6 +686,8 @@ The Blogger API needs a user OAuth token — no client-credentials flow exists. 
     ├── providers.js          # Unified Multi-Provider LLM engine (Ollama, Gemini, Claude, Grok, OpenAI)
     ├── audio.js              # 100% Local STT (Whisper) & Local TTS (MMS-TTS) audio models
     ├── voice_socket.js       # Real-Time WebSocket Voice Bridge & Server
+    ├── dashboard.js            # OpenWebUI-style dashboard server (Bun.serve :8768, REST /api/*, @ command dispatch, web-scope lock)
+    ├── dashboard.test.js       # Dashboard flag/port/chat/lock unit tests (no network)
     ├── telegram.js           # Telegram bot runner integration with voice attachment support
     ├── whatsapp.js           # WhatsApp HTTP bridge server integration (group gate + DM mention router)
     ├── whatsapp_mentions.js  # Shared @character-name matching/strip helpers (server side)
