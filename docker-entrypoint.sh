@@ -39,7 +39,7 @@ else
 fi
 
 # Map env -> app_settings.json without wiping user-tuned values stored in the volume.
-if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${CLAUDE_API_KEY:-}" ] || [ -n "${GROK_API_KEY:-}" ] || [ -n "${WHATSAPP_PHONE:-}" ] || [ -n "${WHATSAPP_ENABLED:-}" ] || [ -n "${WEB_ENABLED:-}" ] || [ -n "${DASHBOARD_ENABLED:-}" ] || [ -n "${DASHBOARD_PORT:-}" ] || [ -n "${WHATSAPP_QR_MODE:-}" ] || [ -n "${WHATSAPP_QR:-}" ] || [ -n "${TELEGRAM_TOKEN:-}" ] || [ -n "${NEEDLE_ENABLED:-}" ] || [ -n "${NEEDLE_MIN_CONFIDENCE:-}" ] || [ -n "${NEEDLE_MODEL_PATH:-}" ] || [ -n "${NEEDLE_PYTHON:-}" ] || [ -n "${NEEDLE_DAEMON_IDLE_MS:-}" ] || [ -n "${OPENCLI_ENABLED:-}" ] || [ -n "${OPENCLI_MODEL:-}" ] || [ -n "${OPENCLI_MAX_ITERATIONS:-}" ] || [ -n "${OPENCLI_ALLOWED_CHATS:-}" ] || [ -n "${CAST_DEVICE_NAME:-}" ] || [ -n "${CAST_DEVICE_HOST:-}" ] || [ -n "${CAST_DEVICE_TYPE:-}" ] || [ -n "${CAST_PORT:-}" ] || [ -n "${CAST_TRANSCODE:-}" ] || [ -n "${CAST_MAX_HEIGHT:-}" ]; then
+if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${CLAUDE_API_KEY:-}" ] || [ -n "${GROK_API_KEY:-}" ] || [ -n "${MISTRAL_API_KEY:-}" ] || [ -n "${WHATSAPP_PHONE:-}" ] || [ -n "${WHATSAPP_ENABLED:-}" ] || [ -n "${WEB_ENABLED:-}" ] || [ -n "${DASHBOARD_ENABLED:-}" ] || [ -n "${DASHBOARD_PORT:-}" ] || [ -n "${WHATSAPP_QR_MODE:-}" ] || [ -n "${WHATSAPP_QR:-}" ] || [ -n "${TELEGRAM_TOKEN:-}" ] || [ -n "${NEEDLE_ENABLED:-}" ] || [ -n "${NEEDLE_MIN_CONFIDENCE:-}" ] || [ -n "${NEEDLE_MODEL_PATH:-}" ] || [ -n "${NEEDLE_PYTHON:-}" ] || [ -n "${NEEDLE_DAEMON_IDLE_MS:-}" ] || [ -n "${OPENCLI_ENABLED:-}" ] || [ -n "${OPENCLI_MODEL:-}" ] || [ -n "${OPENCLI_MAX_ITERATIONS:-}" ] || [ -n "${OPENCLI_ALLOWED_CHATS:-}" ] || [ -n "${CAST_DEVICE_NAME:-}" ] || [ -n "${CAST_DEVICE_HOST:-}" ] || [ -n "${CAST_DEVICE_TYPE:-}" ] || [ -n "${CAST_PORT:-}" ] || [ -n "${CAST_TRANSCODE:-}" ] || [ -n "${CAST_MAX_HEIGHT:-}" ]; then
   bun -e '
     const fs = require("node:fs");
     const p = "app_settings.json";
@@ -52,6 +52,7 @@ if [ -n "${OLLAMA_HOST:-}" ] || [ -n "${OLLAMA_URL:-}" ] || [ -n "${OPENAI_API_K
     if (env.GEMINI_API_KEY) s.gemini_api_key = env.GEMINI_API_KEY;
     if (env.CLAUDE_API_KEY) s.claude_api_key = env.CLAUDE_API_KEY;
     if (env.GROK_API_KEY) s.grok_api_key = env.GROK_API_KEY;
+    if (env.MISTRAL_API_KEY) s.mistral_api_key = env.MISTRAL_API_KEY;
     if (env.WHATSAPP_PHONE) s.whatsapp_phone = env.WHATSAPP_PHONE;
     if (env.TELEGRAM_TOKEN) s.telegram_token = env.TELEGRAM_TOKEN;
     if (env.WHATSAPP_ENABLED === "0" || env.WHATSAPP_ENABLED === "false") s.whatsapp_enabled = false;

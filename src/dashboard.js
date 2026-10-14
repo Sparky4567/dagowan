@@ -965,6 +965,7 @@ export class DashboardServer {
             { id: "gemini", title: "Google Gemini", models: DEFAULT_MODELS.gemini },
             { id: "claude", title: "Anthropic Claude", models: DEFAULT_MODELS.claude },
             { id: "grok", title: "xAI Grok", models: DEFAULT_MODELS.grok },
+            { id: "mistral", title: "Mistral AI", models: DEFAULT_MODELS.mistral },
         ]) {
             const key = getApiKey(p.id, this.settings);
             lines.push(`  ⚡ ${p.title} [Status: ${key ? "configured" : "API key missing"}]:`);
@@ -1022,6 +1023,7 @@ export class DashboardServer {
                     gemini: !!getApiKey("gemini", this.settings),
                     claude: !!getApiKey("claude", this.settings),
                     grok: !!getApiKey("grok", this.settings),
+                    mistral: !!getApiKey("mistral", this.settings),
                 },
             });
         }

@@ -817,6 +817,7 @@ export class LocalVoiceSocketBridge {
                         { id: "gemini", title: "Google Gemini", models: DEFAULT_MODELS.gemini },
                         { id: "claude", title: "Anthropic Claude", models: DEFAULT_MODELS.claude },
                         { id: "grok", title: "xAI Grok", models: DEFAULT_MODELS.grok },
+                        { id: "mistral", title: "Mistral AI", models: DEFAULT_MODELS.mistral },
                     ]) {
                         const key = getApiKey(p.id, this.settings);
                         lines.push(`  ⚡ ${p.title} [Status: ${key ? "configured" : "API key missing"}]:`);

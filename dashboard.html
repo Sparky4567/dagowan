@@ -157,10 +157,10 @@ async function refreshModels(){
   try{
     const j=await api('/api/models');
     const sel=$('modelSelect');sel.innerHTML='';
-    const groups=[['Local Ollama',j.ollama.length?j.ollama:['(daemon offline)']],['OpenAI',j.cloud.openai],['Gemini',j.cloud.gemini],['Claude',j.cloud.claude],['Grok',j.cloud.grok]];
+    const groups=[['Local Ollama',j.ollama.length?j.ollama:['(daemon offline)']],['OpenAI',j.cloud.openai],['Gemini',j.cloud.gemini],['Claude',j.cloud.claude],['Grok',j.cloud.grok],['Mistral',j.cloud.mistral]];
     for(const [g,ms] of groups){const og=document.createElement('optgroup');og.label=g;for(const m of ms){const o=document.createElement('option');o.value=m;o.textContent=m+(m===j.active?' ★':'');if(m===j.active)o.selected=true;og.appendChild(o);}sel.appendChild(og);}
     state.model=j.active;
-    $('providerHint').textContent='keys: openai '+(j.providers.openai?'✓':'×')+' • gemini '+(j.providers.gemini?'✓':'×')+' • claude '+(j.providers.claude?'✓':'×')+' • grok '+(j.providers.grok?'✓':'×');
+    $('providerHint').textContent='keys: openai '+(j.providers.openai?'✓':'×')+' • gemini '+(j.providers.gemini?'✓':'×')+' • claude '+(j.providers.claude?'✓':'×')+' • grok '+(j.providers.grok?'✓':'×')+' • mistral '+(j.providers.mistral?'✓':'×');
   }catch{}
 }
 async function refreshCharacters(){

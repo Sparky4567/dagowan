@@ -2,6 +2,7 @@ import { config as loadDotenv } from "dotenv";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
+import { Mistral } from "@mistralai/mistralai";
 
 import { Ollama } from "ollama";
 import { memoize } from "./utils/memoize.js";
@@ -14,7 +15,21 @@ export const DEFAULT_MODELS = {
     gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
     claude: ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
     grok: ["grok-2-latest", "grok-2-1212", "grok-2-vision-1212", "grok-beta"],
+    mistral: ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest", "ministral-8b-latest", "ministral-3b-latest"],
 };
+
+/**
+ * True when a (lowercased, prefix-free) model name belongs to the Mistral API
+ * rather than a local Ollama model (Ollama also ships a family literally
+ * named "mistral", e.g. mistral:7b / mistral:latest).
+ */
+function isMistralCloudName(low) {
+    return (
+        low.startsWith("mistral-") || low.startsWith("ministral-") || low.startsWith("codestral-") ||
+        low.startsWith("mixtral-") || low.startsWith("magistral-") || low.startsWith("devstral-") ||
+        low.startsWith("open-mistral") || low.startsWith("open-mixtral") || low.startsWith("open-codestral")
+    );
+}
 
 /**
  * Detects provider from model string or explicit prefix (e.g. "openai:gpt-4o", "gemini-2.5-flash")
@@ -27,6 +42,7 @@ function detectProviderUncached(modelName) {
     if (low.startsWith("gemini:") || low.startsWith("google:")) return "gemini";
     if (low.startsWith("claude:") || low.startsWith("anthropic:")) return "claude";
     if (low.startsWith("grok:") || low.startsWith("xai:")) return "grok";
+    if (low.startsWith("mistral:")) return isMistralCloudName(low.slice("mistral:".length)) ? "mistral" : "ollama";
     if (low.startsWith("ollama:")) return "ollama";
 
     if (low.startsWith("gpt-oss") || low.includes("cloud") || low.includes(":")) return "ollama";
@@ -34,6 +50,7 @@ function detectProviderUncached(modelName) {
     if (low.startsWith("gemini-")) return "gemini";
     if (low.startsWith("claude-")) return "claude";
     if (low.startsWith("grok-")) return "grok";
+    if (isMistralCloudName(low)) return "mistral";
 
     return "ollama";
 }
@@ -48,6 +65,12 @@ function normalizeModelNameUncached(modelName) {
         const prefix = parts[0].toLowerCase();
         if (["openai", "chatgpt", "gemini", "google", "claude", "anthropic", "grok", "xai", "ollama"].includes(prefix)) {
             return parts.slice(1).join(":");
+        }
+        // "mistral:" is ambiguous (local Ollama family vs Mistral API):
+        // strip it only for cloud model names, keep local tags intact.
+        if (prefix === "mistral") {
+            const rest = parts.slice(1).join(":");
+            if (isMistralCloudName(rest.toLowerCase())) return rest;
         }
     }
     return modelName;
@@ -70,6 +93,9 @@ export function getApiKey(provider, settings = {}) {
     if (p === "grok" || p === "xai") {
         return settings.grok_api_key || process.env.GROK_API_KEY || process.env.XAI_API_KEY || "";
     }
+    if (p === "mistral") {
+        return settings.mistral_api_key || process.env.MISTRAL_API_KEY || "";
+    }
     return "";
 }
 
@@ -90,7 +116,7 @@ export const normalizeModelName = memoize(normalizeModelNameUncached, { maxSize:
 export const maskApiKey = memoize(maskApiKeyUncached, { maxSize: 200 });
 
 /**
- * Unified Chat Interface supporting Ollama, OpenAI (ChatGPT), Gemini, Claude, and Grok.
+ * Unified Chat Interface supporting Ollama, OpenAI (ChatGPT), Gemini, Claude, Grok, and Mistral.
  */
 export async function unifiedChat({
     modelName,
@@ -310,5 +336,48 @@ export async function unifiedChat({
         }
     }
 
+    // 6. Mistral AI (OpenAI-compatible chat API via @mistralai/mistralai SDK)
+    if (provider === "mistral") {
+        const client = new Mistral({ apiKey });
+        const chatMessages = messages.length > 0
+            ? messages.map((m) => ({ role: m.role, content: m.content }))
+            : [{ role: "user", content: "Hello" }];
+
+        if (stream) {
+            const eventStream = await client.chat.stream({ model, messages: chatMessages });
+            let fullText = "";
+            for await (const event of eventStream) {
+                const delta = event.data?.choices?.[0]?.delta?.content;
+                const text = extractMistralText(delta);
+                if (text) {
+                    fullText += text;
+                    if (onChunk) onChunk(text);
+                }
+            }
+            return { content: fullText };
+        } else {
+            const response = await client.chat.complete({ model, messages: chatMessages });
+            const msgContent = response.choices?.[0]?.message?.content;
+            return { content: extractMistralText(msgContent) };
+        }
+    }
+
     throw new Error(`Unsupported LLM provider: '${provider}'`);
+}
+
+/**
+ * Mistral message content can be a plain string or an array of content chunks
+ * ({ type: "text", text } or { text }). Normalize both shapes to text.
+ */
+function extractMistralText(content) {
+    if (!content) return "";
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+        return content.map((c) => {
+            if (typeof c === "string") return c;
+            if (c && typeof c.text === "string") return c.text;
+            return "";
+        }).join("");
+    }
+    return "";
 }

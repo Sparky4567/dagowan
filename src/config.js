@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS = {
     gemini_api_key: "",
     claude_api_key: "",
     grok_api_key: "",
+    mistral_api_key: "",
     stt_engine: "local",
     tts_engine: "local",
     openai_tts_voice: "alloy",

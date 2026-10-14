@@ -572,7 +572,7 @@ export function formatPageText(res) {
 
 /**
  * System-prompt block injected into the model messages so ANY provider
- * (Ollama local, OpenAI, Gemini, Claude, Grok) answers with live context.
+ * (Ollama local, OpenAI, Gemini, Claude, Grok, Mistral) answers with live context.
  */
 export function buildWebSystemBlock(res) {
     if (!res || !res.success) return "";

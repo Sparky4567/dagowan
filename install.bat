@@ -165,7 +165,7 @@ if errorlevel 1 echo [WARNING] Playwright Chromium install skipped ^(browser com
 echo [SUCCESS] ==========================================================
 echo [SUCCESS] Installation and patching completed successfully!
 echo [INFO]    - For local Ollama models: start Ollama daemon ('ollama serve')
-echo [INFO]    - For Cloud models (Gemini/Claude/OpenAI/Grok): set API keys via /set-api-key
+echo [INFO]    - For Cloud models (Gemini/Claude/OpenAI/Grok/Mistral): set API keys via /set-api-key
 echo [INFO]    - BabyAGI is included and stores its local function registry in data\babyagi.sqlite
 echo [INFO]    - Headless browser engine (Playwright/Chromium) installed for @youtube-play and @browser-* commands
 echo [INFO]    - Needle on-device engine (cactus-needle) pre-seeded for @needle commands; enable the auto fast-path in-app with @set-setting needle_enabled 1

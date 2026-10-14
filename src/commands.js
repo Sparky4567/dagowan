@@ -148,7 +148,7 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @voice-reply [on|off] (or @voicereply) — Toggle automatic local voice note response generation (saved to app_settings.json)
 • @web [on|off] (or @voice-socket, @voice-server, @dagowan) — Launch/toggle real-time duplex voice web interface (http://127.0.0.1:8767)
 • @dashboard [on|off] [port] (or @dash) — Launch/toggle OpenWebUI-style chat dashboard (http://127.0.0.1:8768; custom port via @dashboard 8899, DASHBOARD_PORT, or --dashboard-port N)
-• @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N] (or @websearch) — Live web search injected into the next LLM answer (works for ALL cloud models: OpenAI/Gemini/Claude/Grok + local Ollama). Inline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")
+• @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N] (or @websearch) — Live web search injected into the next LLM answer (works for ALL cloud models: OpenAI/Gemini/Claude/Grok/Mistral + local Ollama). Inline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")
 • @web-fetch <url> (or @webfetch) — Fetch a page as plain text (read a search result in full)
 • @web-status — Show web search engine configuration
 
@@ -197,9 +197,9 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @insight-delete <id|YYYY-MM-DD> — Delete one reflection entry
 
 🎭 Character Profiles & Persona Commands:
-• @model [model-name] — View or switch active LLM model (supports Ollama, Gemini, Claude, Grok, ChatGPT)
-• @models — List available models across all providers (Ollama, Gemini, Claude, Grok, OpenAI)
-• @set-api-key <provider> <key> (or @set-key <provider> <key>) — Save API key for openai, gemini, claude, grok, youtube, spotify, wordpress, blogger, brave, tavily to app_settings.json (spotify takes "<client_id> <client_secret>"; wordpress takes "<site_url> <username> <app_password>"; blogger takes "<blog_id> <access_token>")
+• @model [model-name] — View or switch active LLM model (supports Ollama, Gemini, Claude, Grok, Mistral, ChatGPT)
+• @models — List available models across all providers (Ollama, Gemini, Claude, Grok, Mistral, OpenAI)
+• @set-api-key <provider> <key> (or @set-key <provider> <key>) — Save API key for openai, gemini, claude, grok, mistral, youtube, spotify, wordpress, blogger, brave, tavily to app_settings.json (spotify takes "<client_id> <client_secret>"; wordpress takes "<site_url> <username> <app_password>"; blogger takes "<blog_id> <access_token>")
 • @api-keys (or @keys) — List status of configured provider API keys
 🎭 Simulation Mode (simple separate chat inside the active persona):
 • @simulation <name> [optional note] — Start/resume a simulation; just normal chat with the same persona (each sim has its own archive file in data/simulations/)
@@ -518,7 +518,7 @@ export async function handleAtCommand({
     }
 
     // BabyAGI classic autonomous loop. It shares the selected assistant provider,
-    // so it works with Ollama, OpenAI, Gemini, Claude, or Grok configuration.
+    // so it works with Ollama, OpenAI, Gemini, Claude, Grok, or Mistral configuration.
     if (lower === "/babyagi-status") {
         try {
             const status = await getBabyAGIStatus(context?.settings || {});
@@ -1456,7 +1456,7 @@ export async function handleAtCommand({
         const key = parts.slice(2).join(" ").trim();
 
         if (!provider || !key) {
-            console.log("⚠️ Usage: @set-api-key <openai|gemini|claude|grok|youtube|spotify|wordpress|blogger|semanticscholar|brave|tavily> <api_key>");
+            console.log("⚠️ Usage: @set-api-key <openai|gemini|claude|grok|mistral|youtube|spotify|wordpress|blogger|semanticscholar|brave|tavily> <api_key>");
             console.log("   Spotify takes two parts: @set-api-key spotify <client_id> <client_secret>");
             console.log("   WordPress takes three parts: @set-api-key wordpress <site_url> <username> <app_password>");
             console.log("   Blogger takes two parts: @set-api-key blogger <blog_id> <access_token>");
@@ -1481,6 +1481,10 @@ export async function handleAtCommand({
             context.settings.grok_api_key = key;
             saveSettings(context.settings);
             console.log(`🔑 Saved xAI Grok API Key: ${maskApiKey(key)}`);
+        } else if (["mistral", "mistralai", "mistral-ai"].includes(provider)) {
+            context.settings.mistral_api_key = key;
+            saveSettings(context.settings);
+            console.log(`🔑 Saved Mistral AI API Key: ${maskApiKey(key)}`);
         } else if (["youtube", "google-youtube", "yt"].includes(provider)) {
             context.settings.youtube_api_key = key;
             saveSettings(context.settings);
@@ -1529,7 +1533,7 @@ export async function handleAtCommand({
             saveSettings(context.settings);
             console.log(`🔑 Saved Tavily Search API Key: ${maskApiKey(key)} (upgrades live web search engine; auto-selected when set)`);
         } else {
-            console.log("⚠️ Unknown provider. Supported providers: openai, gemini, claude, grok, youtube, spotify, wordpress, blogger, semanticscholar, brave, tavily");
+            console.log("⚠️ Unknown provider. Supported providers: openai, gemini, claude, grok, mistral, youtube, spotify, wordpress, blogger, semanticscholar, brave, tavily");
         }
         return { handled: true };
     }
@@ -1542,6 +1546,7 @@ export async function handleAtCommand({
             { name: "Google Gemini", keySetting: context.settings.gemini_api_key, envVars: ["GEMINI_API_KEY"] },
             { name: "Anthropic Claude", keySetting: context.settings.claude_api_key, envVars: ["CLAUDE_API_KEY", "ANTHROPIC_API_KEY"] },
             { name: "xAI Grok", keySetting: context.settings.grok_api_key, envVars: ["GROK_API_KEY", "XAI_API_KEY"] },
+            { name: "Mistral AI", keySetting: context.settings.mistral_api_key, envVars: ["MISTRAL_API_KEY"] },
             { name: "YouTube Data API (default @play engine)", keySetting: context.settings.youtube_api_key, envVars: ["YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"] },
             { name: "Spotify Client ID (default @spotify engine)", keySetting: context.settings.spotify_client_id, envVars: ["SPOTIFY_CLIENT_ID"] },
             { name: "Spotify Client Secret", keySetting: context.settings.spotify_client_secret, envVars: ["SPOTIFY_CLIENT_SECRET"] },
@@ -1611,6 +1616,7 @@ export async function handleAtCommand({
             { id: "gemini", title: "Google Gemini", models: DEFAULT_MODELS.gemini },
             { id: "claude", title: "Anthropic Claude", models: DEFAULT_MODELS.claude },
             { id: "grok", title: "xAI Grok", models: DEFAULT_MODELS.grok },
+            { id: "mistral", title: "Mistral AI", models: DEFAULT_MODELS.mistral },
         ];
 
         cloudProviders.forEach((p) => {

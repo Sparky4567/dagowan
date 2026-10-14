@@ -476,7 +476,7 @@ async function main() {
 
         // 5b. Live web search: "@live-web" anywhere in the sentence triggers a
         // real-time search whose results are injected as system context, so
-        // EVERY provider (local Ollama + OpenAI/Gemini/Claude/Grok cloud
+        // EVERY provider (local Ollama + OpenAI/Gemini/Claude/Grok/Mistral cloud
         // models via unifiedChat) answers with current facts. "@web" is the
         // voice-bridge toggle and never reaches here
         // (owned by handleSlashCommand above).

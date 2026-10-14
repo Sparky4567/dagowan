@@ -1,6 +1,6 @@
 # Ollama & Multi-Provider AI Assistant Toolsuite (Bun)
 
-An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cloud multi-provider LLM support (**Ollama**, **Google Gemini**, **Anthropic Claude**, **xAI Grok**, **OpenAI ChatGPT**), 100% offline local voice processing (**STT Speech-to-Text & TTS Text-to-Speech**), pure JavaScript Markdown/PDF conversion tools, persistent memory management, Kanban task board, custom character profiles, chat session management, agentic web tools, **Telegram & WhatsApp Bridges**, **OpenWebUI-style Dashboard**, and the **Ollama CLI Autonomous Coding Engine**!
+An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cloud multi-provider LLM support (**Ollama**, **Google Gemini**, **Anthropic Claude**, **xAI Grok**, **Mistral AI**, **OpenAI ChatGPT**), 100% offline local voice processing (**STT Speech-to-Text & TTS Text-to-Speech**), pure JavaScript Markdown/PDF conversion tools, persistent memory management, Kanban task board, custom character profiles, chat session management, agentic web tools, **Telegram & WhatsApp Bridges**, **OpenWebUI-style Dashboard**, and the **Ollama CLI Autonomous Coding Engine**!
 
 ---
 
@@ -11,6 +11,7 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * **Google Gemini**: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-1.5-pro`, `gemini-1.5-flash`
   * **Anthropic Claude**: `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229`
   * **xAI Grok**: `grok-2-latest`, `grok-2-1212`, `grok-2-vision-1212`, `grok-beta`
+  * **Mistral AI**: `mistral-large-latest`, `mistral-medium-latest`, `mistral-small-latest`, `codestral-latest`, `ministral-8b-latest`, `ministral-3b-latest`
   * **OpenAI ChatGPT**: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo`, `o1`, `o3-mini`
   * Dynamic provider auto-routing, seamless key management, and real-time streaming responses.
   * **One shared model setting** across CLI chat, web voice, Telegram, WhatsApp, learning, BabyAGI, and coding tools. On a fresh install, the first model returned by Ollama is selected automatically; if Ollama is unavailable, the documented first local model (`llama3`) is used until changed.
@@ -57,7 +58,7 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * Safety rails: domain allowlist, auto headless fallback on display-less machines (`BROWSER_HEADLESS` override), audit log in `logs/browser.log`.
 
 * **🌐 Live web search (`src/websearch.js` + `src/mcp_web_server.js`, zero new dependencies)**:
-  * Mention **`@live-web` anywhere in a sentence** (`latest BTC price @live-web`) and the turn runs a real-time search whose results are injected as system context — so **every** provider (local Ollama + OpenAI/Gemini/Claude/Grok cloud models) answers with current facts and `[1]`, `[2]` citations. Works on CLI, Telegram, WhatsApp, Web UI, and the Chrome side panel; works while PIN/OTP-locked (mid-sentence `@live-web` is chat, not a control command). (`@web` stays the voice-bridge toggle.)
+  * Mention **`@live-web` anywhere in a sentence** (`latest BTC price @live-web`) and the turn runs a real-time search whose results are injected as system context — so **every** provider (local Ollama + OpenAI/Gemini/Claude/Grok/Mistral cloud models) answers with current facts and `[1]`, `[2]` citations. Works on CLI, Telegram, WhatsApp, Web UI, and the Chrome side panel; works while PIN/OTP-locked (mid-sentence `@live-web` is chat, not a control command). (`@web` stays the voice-bridge toggle.)
   * **Engines** (`auto` default): Brave Search API → Tavily → keyless DuckDuckGo fallback (Instant Answer abstract + HTML results merged, deduped). Explicit `@live-web <query>` / `@web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]`, `@web-fetch <url>` (page → plain text), `@web-status`.
   * **MCP pair**: built-in `web` server (`web__web_search` / `web__web_fetch`) auto-registered next to `local`; keys via `@set-api-key brave|tavily <key>` (or `BRAVE_API_KEY` / `TAVILY_API_KEY`). Settings: `websearch_enabled` (default on), `websearch_provider`, `websearch_max_results` (1–10, default 5), `websearch_timeout_ms`. Unit-tested (`src/websearch.test.js`, mocked fetch — no network).
 
@@ -140,7 +141,7 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
 
 * **🍼 Integrated BabyAGI Autonomous Planning**:
   * A Bun-native classic BabyAGI loop with task execution, task creation, prioritization, and retrieval of prior task results from SQLite-backed vector memory.
-  * Uses the assistant's selected provider and model, so it works with local Ollama or configured OpenAI, Gemini, Claude, and Grok models.
+  * Uses the assistant's selected provider and model, so it works with local Ollama or configured OpenAI, Gemini, Claude, Grok, and Mistral models.
   * Persists its function registry, execution history, and task context in `data/babyagi.sqlite`.
 
 * **⚡ Memoisation for Expensive Pure Tasks (`src/utils/memoize.js`)**:
@@ -402,6 +403,7 @@ OPENAI_API_KEY=sk-proj-...
 GEMINI_API_KEY=AIzaSy...
 CLAUDE_API_KEY=sk-ant-...
 GROK_API_KEY=xai-...
+MISTRAL_API_KEY=...
 SEMANTIC_SCHOLAR_API_KEY=... # optional, free; raises @fact-check rate limits
 FACTCHECK_SOURCE=auto # @fact-check engine: auto|papers|gemini (Gemini verdict needs GEMINI_API_KEY)
 BRAVE_API_KEY=... # optional; upgrades live web search engine (auto-selected when set)
@@ -418,6 +420,7 @@ Inside the running application:
 @set-api-key gemini AIzaSy...
 @set-api-key claude sk-ant-...
 @set-api-key grok xai-...
+@set-api-key mistral ...
 @set-api-key semanticscholar ...
 @set-api-key brave ... # optional; upgrades live web search engine
 @set-api-key tavily ... # optional; upgrades live web search engine
@@ -442,9 +445,9 @@ Inside the running application:
 * Engines: Brave → Tavily (with `@set-api-key brave|tavily <key>`) → keyless DuckDuckGo. MCP pair: `web__web_search` / `web__web_fetch`. Settings: `websearch_enabled`, `websearch_provider`, `websearch_max_results`, `websearch_timeout_ms`.
 
 ### 🤖 LLM Models & Multi-Provider API Keys
-* `@models` — List all available models across local Ollama, OpenAI, Gemini, Claude, and Grok.
-* `@model [model-name]` — View or switch the single shared model (e.g., `@model gemini-2.5-flash`, `@model claude-3-5-sonnet-20241022`, `@model grok-2-latest`, `@model gpt-4o`, `@model llama3`). The change is applied to CLI chat, web voice, Telegram, WhatsApp, learning, BabyAGI, personas, and coding tools.
-* `@set-api-key <provider> <api_key>` (or `@set-key <provider> <key>`) — Set API key for `openai`, `gemini`, `claude`, `grok`, `youtube`, `spotify`, `wordpress` (`<site_url> <username> <app_password>`), `blogger` (`<blog_id> <access_token>`), `semanticscholar` (optional free key, raises `@fact-check` rate limits), `brave` / `tavily` (optional, upgrade live web search — DuckDuckGo works keyless).
+* `@models` — List all available models across local Ollama, OpenAI, Gemini, Claude, Grok, and Mistral.
+* `@model [model-name]` — View or switch the single shared model (e.g., `@model gemini-2.5-flash`, `@model claude-3-5-sonnet-20241022`, `@model grok-2-latest`, `@model mistral-large-latest`, `@model gpt-4o`, `@model llama3`). The change is applied to CLI chat, web voice, Telegram, WhatsApp, learning, BabyAGI, personas, and coding tools.
+* `@set-api-key <provider> <api_key>` (or `@set-key <provider> <key>`) — Set API key for `openai`, `gemini`, `claude`, `grok`, `mistral`, `youtube`, `spotify`, `wordpress` (`<site_url> <username> <app_password>`), `blogger` (`<blog_id> <access_token>`), `semanticscholar` (optional free key, raises `@fact-check` rate limits), `brave` / `tavily` (optional, upgrade live web search — DuckDuckGo works keyless).
 * `@api-keys` (or `@keys`) — View status and source of configured provider API keys, plus the `@play`/`@spotify`, `@blog`, `@fact-check`, and live web search engine status.
 
 ### 🛠 Ollama CLI Agentic Coding & Project Commands
@@ -695,7 +698,7 @@ The Blogger API needs a user OAuth token — no client-credentials flow exists. 
     ├── workspace.js          # Workspace note file reader & relevance search
     ├── chat_context.js       # Parallel chat-context assembly (memories+knowledge+sessions via Promise.all + workers)
     ├── pdf_utils.js          # Pure JavaScript Markdown-to-PDF & PDF-to-Markdown tools (parallel workers for batch)
-    ├── providers.js          # Unified Multi-Provider LLM engine (Ollama, Gemini, Claude, Grok, OpenAI)
+    ├── providers.js          # Unified Multi-Provider LLM engine (Ollama, Gemini, Claude, Grok, Mistral, OpenAI)
     ├── audio.js              # 100% Local STT (Whisper) & Local TTS (MMS-TTS) audio models
     ├── voice_socket.js       # Real-Time WebSocket Voice Bridge & Server
     ├── dashboard.js            # OpenWebUI-style dashboard server (Bun.serve :8768, REST /api/*, @ command dispatch, web-scope lock)
