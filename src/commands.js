@@ -235,6 +235,7 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @settings (or @get-settings) — View all current application settings from app_settings.json
 • @set-setting <key> <value> — Update and save any setting to app_settings.json
 • @set-server-url <url> — Set Ollama server URL and save to app_settings.json
+• @ephemeral [on|off|status] (or @one-shot) — Toggle one-shot Ollama inference via bun-ollama CLI (default ON: model loads per turn, answers once, then unloads to free RAM; OFF = persistent server, model stays resident). Keys: ollama_ephemeral, ollama_lite_dir, ollama_ephemeral_timeout_ms
 • @set-mem-limit <num> — Set memory context message limit and save to app_settings.json
 • @set-workspace <name> — Set active workspace name and save to app_settings.json
 • @export-settings [name] (or @backup) — Export settings, prompts, memories, and tasks to backups/
@@ -2038,6 +2039,22 @@ export async function handleAtCommand({
         } catch (err) {
             console.log(`⚠️ Local TTS Error: ${err.message}`);
         }
+        return { handled: true };
+    }
+
+    // Ephemeral one-shot Ollama inference toggle - @ephemeral [on|off|status], @one-shot, @oneshot
+    if (lower === "/ephemeral" || lower.startsWith("/ephemeral ") || lower === "/one-shot" || lower.startsWith("/one-shot ") || lower === "/oneshot" || lower.startsWith("/oneshot ")) {
+        const { parseEphemeralToggleArg, formatEphemeralReply } = await import("./ollama_ephemeral.js");
+        const arg = (input.split(/\s+/)[1] || "");
+        const action = parseEphemeralToggleArg(arg);
+        if (action === "invalid") {
+            console.log("⚠️ Usage: @ephemeral [on|off|status] (or @one-shot)");
+            return { handled: true };
+        }
+        if (action === "on") context.settings.ollama_ephemeral = true;
+        else if (action === "off") context.settings.ollama_ephemeral = false;
+        saveSettings(context.settings);
+        console.log(`\n${formatEphemeralReply(context.settings)}\n`);
         return { handled: true };
     }
 

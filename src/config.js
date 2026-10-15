@@ -12,6 +12,14 @@ export const DEFAULT_SETTINGS = {
     // Resolved at first startup to the first installed Ollama model.
     model: "",
     server_url: "http://localhost:11434",
+    // Ephemeral one-shot inference via bun-ollama CLI
+    // (`bun run <ollama_lite_dir>/src/index.ts run <model> --messages-json '<msgs>'`).
+    // true (default): each Ollama turn loads the model, answers, then unloads
+    //   it so RAM is freed immediately. 0/false/off disables this and uses
+    //   the persistent HTTP daemon (model stays resident in RAM).
+    ollama_ephemeral: true,
+    ollama_lite_dir: "",
+    ollama_ephemeral_timeout_ms: 180000,
     system_template: "You are a helpful assistant.",
     mem_limit: 10,
     active_character: "main",

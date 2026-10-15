@@ -21,6 +21,7 @@
     "web": "bun run patch_onnx.js && bun run index.js --web",
     "dashboard": "bun run patch_onnx.js && bun run index.js --dashboard",
     "babyagi": "bun run babyagi.ts",
+    "ask": "bun run src/one_shot.js",
     "test": "bun test"
   },
   "dependencies": {

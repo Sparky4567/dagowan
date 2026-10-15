@@ -694,6 +694,22 @@ export class LocalVoiceSocketBridge {
                     return;
                 }
 
+                // Ephemeral one-shot Ollama inference toggle
+                if (cmdLower === "/ephemeral" || cmdLower.startsWith("/ephemeral ") || cmdLower === "/one-shot" || cmdLower.startsWith("/one-shot ") || cmdLower === "/oneshot" || cmdLower.startsWith("/oneshot ")) {
+                    const { parseEphemeralToggleArg, formatEphemeralReply } = await import("./ollama_ephemeral.js");
+                    const parts = trimmedText.split(/\s+/);
+                    const action = parseEphemeralToggleArg(parts[1] || "");
+                    if (action === "invalid") {
+                        done("⚠️ Usage: @ephemeral [on|off|status] (or @one-shot)");
+                        return;
+                    }
+                    if (action === "on") this.settings.ollama_ephemeral = true;
+                    else if (action === "off") this.settings.ollama_ephemeral = false;
+                    try { saveSettings(this.settings); } catch {}
+                    done(formatEphemeralReply(this.settings));
+                    return;
+                }
+
                 // PDF conversion
                 if (cmdLower.startsWith("/convert-pdf") || cmdLower.startsWith("/pdf")) {
                     const parts = trimmedText.split(/\s+/);

@@ -706,6 +706,21 @@ export class TelegramBotRunner {
             return;
         }
 
+        if (lower === "/ephemeral" || lower.startsWith("/ephemeral ") || lower === "/one-shot" || lower.startsWith("/one-shot ") || lower === "/oneshot" || lower.startsWith("/oneshot ")) {
+            const { parseEphemeralToggleArg, formatEphemeralReply } = await import("./ollama_ephemeral.js");
+            const parts = msgText.split(/\s+/);
+            const action = parseEphemeralToggleArg(parts[1] || "");
+            if (action === "invalid") {
+                await this.sendMessage(chatId, "⚠️ Usage: @ephemeral [on|off|status] (or @one-shot)");
+                return;
+            }
+            if (action === "on") this.settings.ollama_ephemeral = true;
+            else if (action === "off") this.settings.ollama_ephemeral = false;
+            try { saveSettings(this.settings); } catch {}
+            await this.sendMessage(chatId, formatEphemeralReply(this.settings));
+            return;
+        }
+
         // PDF conversion
         if (lower.startsWith("/convert-pdf") || lower.startsWith("/pdf")) {
             const parts = msgText.split(/\s+/);

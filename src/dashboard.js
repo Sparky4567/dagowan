@@ -792,6 +792,18 @@ export class DashboardServer {
             return `🔊 Automatic Local Voice Reply / Voice Mode is now: ${this.settings.voice_reply_enabled ? "ENABLED (ON)" : "DISABLED (OFF)"}`;
         }
 
+        // ---- Ephemeral one-shot Ollama inference toggle ----
+        if (cmdLower === "/ephemeral" || cmdLower.startsWith("/ephemeral ") || cmdLower === "/one-shot" || cmdLower.startsWith("/one-shot ") || cmdLower === "/oneshot" || cmdLower.startsWith("/oneshot ")) {
+            const { parseEphemeralToggleArg, formatEphemeralReply } = await import("./ollama_ephemeral.js");
+            const parts = text.split(/\s+/);
+            const action = parseEphemeralToggleArg(parts[1] || "");
+            if (action === "invalid") return "⚠️ Usage: @ephemeral [on|off|status] (or @one-shot)";
+            if (action === "on") this.settings.ollama_ephemeral = true;
+            else if (action === "off") this.settings.ollama_ephemeral = false;
+            persistSettings();
+            return formatEphemeralReply(this.settings);
+        }
+
         // ---- PDF conversion ----
         if (cmdLower.startsWith("/convert-pdf") || cmdLower.startsWith("/pdf")) {
             try {

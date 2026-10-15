@@ -723,6 +723,17 @@ export class WhatsAppBridgeServer {
             return `🔊 Automatic Local Voice Reply / Voice Mode is now: ${this.settings.voice_reply_enabled ? "ENABLED (ON)" : "DISABLED (OFF)"}`;
         }
 
+        if (lower === "/ephemeral" || lower.startsWith("/ephemeral ") || lower === "/one-shot" || lower.startsWith("/one-shot ") || lower === "/oneshot" || lower.startsWith("/oneshot ")) {
+            const { parseEphemeralToggleArg, formatEphemeralReply } = await import("./ollama_ephemeral.js");
+            const parts = promptText.split(/\s+/);
+            const action = parseEphemeralToggleArg(parts[1] || "");
+            if (action === "invalid") return "⚠️ Usage: @ephemeral [on|off|status] (or @one-shot)";
+            if (action === "on") this.settings.ollama_ephemeral = true;
+            else if (action === "off") this.settings.ollama_ephemeral = false;
+            try { saveSettings(this.settings); } catch {}
+            return formatEphemeralReply(this.settings);
+        }
+
         if (lower.startsWith("/convert-pdf") || lower.startsWith("/pdf")) {
             const parts = promptText.split(/\s+/);
             const res = convertNotesToPdf("notes", "pdfs", parts[1] || "", parts[2] || "");

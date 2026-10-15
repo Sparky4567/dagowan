@@ -15,6 +15,7 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * **OpenAI ChatGPT**: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo`, `o1`, `o3-mini`
   * Dynamic provider auto-routing, seamless key management, and real-time streaming responses.
   * **One shared model setting** across CLI chat, web voice, Telegram, WhatsApp, learning, BabyAGI, and coding tools. On a fresh install, the first model returned by Ollama is selected automatically; if Ollama is unavailable, the documented first local model (`llama3`) is used until changed.
+  * **Ephemeral one-shot Ollama inference (default ON)**: every local-Ollama turn shells out to the bun-ollama CLI (`bun run <ollama-lite>/src/index.ts run <model> --messages-json '<msgs>'` with the model read from settings and full role-labeled history preserved), answers once, then unloads the model so RAM is freed immediately — no persistent `llama-server` between turns. Toggle on any surface with `@ephemeral [on|off|status]` (or `@set-setting ollama_ephemeral 0` for the persistent `server_url` daemon). One-shot CLI: `bun run ask "Why is the sky blue?"` (uses `settings.model`; `--model <name>` overrides).
 
 * **🎙 100% Local STT & TTS Voice Processing (Offline)**:
   * **Speech-To-Text (STT)**: Local Whisper ONNX model (`Xenova/whisper-tiny.en`) transcribes voice attachments and audio files locally.
@@ -320,6 +321,11 @@ starter.bat --web
   ```bash
   bun run babyagi -- "Create a practical launch plan for an offline voice assistant" --iterations 4
   ```
+* **One-shot ephemeral answer (model from settings, RAM freed afterwards)**:
+  ```bash
+  bun run ask "Why is the sky blue?"
+  bun run ask --model smollm2:135m "Why is the sky blue?"
+  ```
 
 ---
 
@@ -447,6 +453,7 @@ Inside the running application:
 ### 🤖 LLM Models & Multi-Provider API Keys
 * `@models` — List all available models across local Ollama, OpenAI, Gemini, Claude, Grok, and Mistral.
 * `@model [model-name]` — View or switch the single shared model (e.g., `@model gemini-2.5-flash`, `@model claude-3-5-sonnet-20241022`, `@model grok-2-latest`, `@model mistral-large-latest`, `@model gpt-4o`, `@model llama3`). The change is applied to CLI chat, web voice, Telegram, WhatsApp, learning, BabyAGI, personas, and coding tools.
+* `@ephemeral [on|off|status]` (or `@one-shot`) — Toggle one-shot Ollama inference via the bun-ollama CLI (default ON: every Ollama turn loads the model, answers once, then unloads it so RAM is freed; OFF uses the persistent `server_url` daemon with the model resident). Same command on CLI, Telegram, WhatsApp, web voice, and dashboard. Settings: `ollama_ephemeral`, `ollama_lite_dir` (auto-detected: setting → `OLLAMA_LITE_DIR` → `ollama-lite` on `PATH` → sibling checkout), `ollama_ephemeral_timeout_ms` (default 180000), `ollama_ephemeral_strip`. Note: the `@make` coding agent loop always needs the persistent endpoint for its multi-step tool calls.
 * `@set-api-key <provider> <api_key>` (or `@set-key <provider> <key>`) — Set API key for `openai`, `gemini`, `claude`, `grok`, `mistral`, `youtube`, `spotify`, `wordpress` (`<site_url> <username> <app_password>`), `blogger` (`<blog_id> <access_token>`), `semanticscholar` (optional free key, raises `@fact-check` rate limits), `brave` / `tavily` (optional, upgrade live web search — DuckDuckGo works keyless).
 * `@api-keys` (or `@keys`) — View status and source of configured provider API keys, plus the `@play`/`@spotify`, `@blog`, `@fact-check`, and live web search engine status.
 
@@ -699,6 +706,9 @@ The Blogger API needs a user OAuth token — no client-credentials flow exists. 
     ├── chat_context.js       # Parallel chat-context assembly (memories+knowledge+sessions via Promise.all + workers)
     ├── pdf_utils.js          # Pure JavaScript Markdown-to-PDF & PDF-to-Markdown tools (parallel workers for batch)
     ├── providers.js          # Unified Multi-Provider LLM engine (Ollama, Gemini, Claude, Grok, Mistral, OpenAI)
+    ├── ollama_ephemeral.js     # Ephemeral one-shot Ollama inference via bun-ollama CLI (@ephemeral/@one-shot, default ON; RAM freed per turn)
+    ├── ollama_ephemeral.test.js # Ephemeral one-shot unit tests (discovery, sanitizing, toggle parsing; no network/model)
+    ├── one_shot.js             # One-shot CLI (`bun run ask "<prompt>" [--model <name>]`, model from settings)
     ├── audio.js              # 100% Local STT (Whisper) & Local TTS (MMS-TTS) audio models
     ├── voice_socket.js       # Real-Time WebSocket Voice Bridge & Server
     ├── dashboard.js            # OpenWebUI-style dashboard server (Bun.serve :8768, REST /api/*, @ command dispatch, web-scope lock)

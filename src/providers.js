@@ -6,6 +6,7 @@ import { Mistral } from "@mistralai/mistralai";
 
 import { Ollama } from "ollama";
 import { memoize } from "./utils/memoize.js";
+import { isEphemeralEnabled, runOllamaLiteOnce } from "./ollama_ephemeral.js";
 
 loadDotenv();
 
@@ -141,6 +142,19 @@ export async function unifiedChat({
 
     // 1. Ollama
     if (provider === "ollama") {
+        // Default: ephemeral one-shot via bun-ollama CLI
+        // (`bun run <ollama-lite>/src/index.ts run <model> --messages-json '<msgs>'`).
+        // The CLI loads llama-server, answers, then shutdownAll() frees RAM.
+        // Disable with @set-setting ollama_ephemeral 0 to use the persistent
+        // HTTP daemon (keeps the model resident in RAM between turns).
+        if (isEphemeralEnabled(settings)) {
+            try {
+                return await runOllamaLiteOnce({ model, messages, settings, onChunk, stream });
+            } catch (ephemErr) {
+                const hostUrl = (settings && settings.server_url) ? settings.server_url : "http://127.0.0.1:11434";
+                console.warn(`⚠️ Ephemeral ollama-lite run failed (${ephemErr.message}), falling back to persistent server at ${hostUrl}...`);
+            }
+        }
         const hostUrl = (settings && settings.server_url) ? settings.server_url : "http://127.0.0.1:11434";
         const client = (settings && settings.server_url) ? new Ollama({ host: hostUrl }) : (ollamaClient || new Ollama({ host: hostUrl }));
 
