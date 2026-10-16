@@ -32,7 +32,7 @@ import { WhatsAppBridgeServer, shouldStartWhatsApp } from "./src/whatsapp.js";
 import { unifiedChat } from "./src/providers.js";
 import { synthesizeSpeechLocal } from "./src/audio.js";
 import { LocalVoiceSocketBridge } from "./src/voice_socket.js";
-import { DashboardServer, shouldStartDashboard, resolveDashboardPort } from "./src/dashboard.js";
+import { DashboardServer, shouldStartDashboard, shouldStartAvatar, shouldStartAiFriend, shouldStartAiFriendDash, resolveDashboardPort } from "./src/dashboard.js";
 import { ProactiveChatManager } from "./src/proactive.js";
 import { initializeSharedModel, getSharedModel, setSharedModel } from "./src/model_selection.js";
 import { tryNeedleFastPath, stopNeedleDaemon } from "./src/needle.js";
@@ -185,10 +185,40 @@ async function main() {
 
     let dashboardServer = null;
     const dashDecision = shouldStartDashboard(settings, process.argv, process.env);
+    const avatarDecision = shouldStartAvatar(settings, process.argv, process.env);
+    const aiFriendDecision = shouldStartAiFriend(settings, process.argv, process.env);
+    const aiFriendDashDecision = shouldStartAiFriendDash(settings, process.argv, process.env);
+    if (avatarDecision.enabled) {
+        settings.avatar_enabled = true;
+        try { saveSettings(settings); } catch {}
+    }
+    if (aiFriendDecision.enabled) {
+        settings.aifriend_enabled = true;
+        try { saveSettings(settings); } catch {}
+    }
+    if (aiFriendDashDecision.enabled) {
+        settings.aifrienddash_enabled = true;
+        try { saveSettings(settings); } catch {}
+    }
     if (dashDecision.start) {
         const dashPort = resolveDashboardPort(settings, process.argv, process.env);
         dashboardServer = new DashboardServer({ settings, characterStore });
         dashboardServer.start(dashPort);
+        if (avatarDecision.enabled) {
+            console.log(`👄 Avatar popup: http://127.0.0.1:${dashPort}/avatar (dashboard voice only)`);
+        } else {
+            console.log("👄 Avatar: Disabled (launch with --avatar to enable the lipsync popup)");
+        }
+        if (aiFriendDecision.enabled) {
+            console.log(`🤖 AI Friend popup (AI Bud Pro avatar): http://127.0.0.1:${dashPort}/aifriend (dashboard voice only)`);
+        } else {
+            console.log("🤖 AI Friend: Disabled (launch with --aifriend to enable the AI Bud Pro avatar)");
+        }
+        if (aiFriendDashDecision.enabled) {
+            console.log(`🤖💬 AI Friend dashboard (AI Bud Pro chat): http://127.0.0.1:${dashPort}/aifrienddash`);
+        } else {
+            console.log("🤖💬 AI Friend dashboard: Disabled (launch with --aifrienddash to enable the AI Bud Pro chat)");
+        }
     } else if (dashDecision.reason === "disabled-flag" || dashDecision.reason === "disabled-env") {
         console.log("📊 Dashboard: Disabled");
     } else {
@@ -474,7 +504,7 @@ async function main() {
             });
         }
 
-        // 5b. Live web search: "@live-web" anywhere in the sentence triggers a
+        // 5b. Live web search: "@live-web" / "@live-gemini" anywhere in the sentence triggers a
         // real-time search whose results are injected as system context, so
         // EVERY provider (local Ollama + OpenAI/Gemini/Claude/Grok/Mistral cloud
         // models via unifiedChat) answers with current facts. "@web" is the

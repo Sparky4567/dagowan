@@ -7,10 +7,13 @@
 //     `bun test` never touches the network.
 //   - Settings win after env (same convention as providers.js).
 //
-// Trigger rule (see parseWebSearchInput):
+// Trigger rule (see parseWebSearchInput / parseLiveGeminiInput):
 //   - "@live-web" ANYWHERE inside a sentence triggers a live search, e.g.
 //     "what is the price of BTC @live-web today" -> query without the token.
-//   - Leading "@live-web <query>", "@web-search <query>" / "@websearch
+//   - "@live-gemini" ANYWHERE triggers a Google AI Mode search, e.g.
+//     "explain black holes @live-gemini" -> query without the token.
+//   - Leading "@live-web <query>", "@live-gemini <query>",
+//     "@web-search <query>" / "@websearch
 //     <query>" are the explicit search command forms (same trigger).
 //   - "@web" is NEVER a search trigger: bare "@web" / "@web on|off|..."
 //     stays the voice-bridge toggle owned by commands.js, and plain "@web"
@@ -20,7 +23,15 @@
 //   1. Brave Search API (needs BRAVE_API_KEY / brave_api_key)
 //   2. Tavily Search API (needs TAVILY_API_KEY / tavily_api_key)
 //   3. DuckDuckGo (no key: HTML results + Instant Answer abstract)
-// Explicit `--provider brave|tavily|duckduckgo` (or websearch_provider)
+//
+// Google AI Mode (`@live-gemini`, provider `google-ai` / alias `gemini`):
+//   1. Gemini API with `google_search` grounding (needs GEMINI_API_KEY /
+//      gemini_api_key) — this is Google's official AI Mode backend: AI
+//      answer + groundingChunks sources.
+//   2. Keyless Google scrape (`google.com/search?udm=50` AI Mode + classic
+//      fallback). Often JS-challenged for plain fetch, so best-effort.
+//   3. DuckDuckGo fallback (reported via `fallback: true`).
+// Explicit `--provider brave|tavily|duckduckgo|google-ai` (or websearch_provider)
 // forces one engine, falling back to DuckDuckGo on failure.
 //
 // Env / settings (settings win after env):
@@ -30,13 +41,15 @@
 //   WEBSEARCH_TIMEOUT_MS / websearch_timeout_ms (default 12000, max 60000)
 //   BRAVE_API_KEY / brave_api_key
 //   TAVILY_API_KEY / tavily_api_key
+//   GEMINI_API_KEY / gemini_api_key (shared with chat + @fact-check)
+//   GEMINI_SEARCH_MODEL / gemini_search_model (default "gemini-2.5-flash")
 // ---------------------------------------------------------------------------
 
 export const WEBSEARCH_DEFAULT_MAX_RESULTS = 5;
 export const WEBSEARCH_MAX_LIMIT = 10;
 export const WEBSEARCH_DEFAULT_TIMEOUT_MS = 12000;
 export const WEBSEARCH_MAX_TIMEOUT_MS = 60000;
-export const WEBSEARCH_PROVIDERS = ["auto", "duckduckgo", "brave", "tavily"];
+export const WEBSEARCH_PROVIDERS = ["auto", "duckduckgo", "brave", "tavily", "google-ai"];
 export const WEBSEARCH_USER_AGENT =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
@@ -44,6 +57,9 @@ export const DUCKDUCKGO_HTML_URL = "https://html.duckduckgo.com/html/";
 export const DUCKDUCKGO_INSTANT_URL = "https://api.duckduckgo.com/";
 export const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 export const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
+export const GOOGLE_AI_MODE_URL = "https://www.google.com/search";
+export const GOOGLE_SEARCH_URL = "https://www.google.com/search";
+export const GEMINI_SEARCH_DEFAULT_MODEL = "gemini-2.5-flash";
 
 // --- settings ---------------------------------------------------------------
 
@@ -62,6 +78,7 @@ export function resolveWebSearchProvider(value, settings = {}) {
     if (["ddg", "duck", "duck-duck-go", "html"].includes(raw)) return "duckduckgo";
     if (["brave", "brave-search", "bravesearch"].includes(raw)) return "brave";
     if (["tavily", "tavily-ai", "tavilyai"].includes(raw)) return "tavily";
+    if (["google-ai", "googleai", "google", "gemini", "ai-mode", "aimode", "live-gemini", "gemini-search", "googlesearch"].includes(raw)) return "google-ai";
     if (raw === "duckduckgo") return "duckduckgo";
     return "auto";
 }
@@ -96,6 +113,24 @@ export function getTavilyApiKey(settings = {}) {
     return (settings && settings.tavily_api_key) || process.env.TAVILY_API_KEY || "";
 }
 
+export function getGeminiApiKey(settings = {}) {
+    return (settings && settings.gemini_api_key) || process.env.GEMINI_API_KEY || "";
+}
+
+export function getGeminiSearchModel(settings = {}, override) {
+    const fromOverride = String(override || "").trim();
+    if (fromOverride) return fromOverride;
+    const fromSettings = String((settings && (settings.gemini_search_model || settings.factcheck_gemini_model)) || "").trim();
+    if (fromSettings) return fromSettings;
+    const fromEnv = String(process.env.GEMINI_SEARCH_MODEL || process.env.FACTCHECK_GEMINI_MODEL || "").trim();
+    if (fromEnv) return fromEnv;
+    return GEMINI_SEARCH_DEFAULT_MODEL;
+}
+
+export function isGeminiSearchConfigured(settings = {}) {
+    return Boolean(getGeminiApiKey(settings));
+}
+
 export function getWebStatus(settings = {}) {
     return {
         enabled: isWebSearchEnabled(settings),
@@ -105,6 +140,8 @@ export function getWebStatus(settings = {}) {
         brave: Boolean(getBraveApiKey(settings)),
         tavily: Boolean(getTavilyApiKey(settings)),
         duckduckgo: true, // keyless, always available
+        gemini: isGeminiSearchConfigured(settings), // Google AI Mode grounding
+        googleAi: true, // keyless Google scrape attempted even without a key
     };
 }
 
@@ -112,10 +149,11 @@ export function formatWebStatus(settings = {}) {
     const st = getWebStatus(settings);
     const lines = ["🌐 Live web search (@live-web):"];
     lines.push(`  • Enabled: ${st.enabled ? "yes" : "no"} (@set-setting websearch_enabled <on|off>)`);
-    lines.push(`  • Provider: ${st.provider} (@set-setting websearch_provider <auto|duckduckgo|brave|tavily>)`);
+    lines.push(`  • Provider: ${st.provider} (@set-setting websearch_provider <auto|duckduckgo|brave|tavily|google-ai>)`);
     lines.push(`  • Max results: ${st.maxResults} (@set-setting websearch_max_results <1-10>)`);
-    lines.push(`  • Engines: duckduckgo (keyless, always on)${st.brave ? ", brave (key set)" : ", brave (no key — @set-api-key brave <key>)"}${st.tavily ? ", tavily (key set)" : ", tavily (no key — @set-api-key tavily <key>)"}`);
+    lines.push(`  • Engines: duckduckgo (keyless, always on)${st.brave ? ", brave (key set)" : ", brave (no key — @set-api-key brave <key>)"}${st.tavily ? ", tavily (key set)" : ", tavily (no key — @set-api-key tavily <key>)"}${st.gemini ? ", google-ai / @live-gemini (Gemini grounding ready)" : ", google-ai / @live-gemini (keyless scrape; set @set-api-key gemini <key> for grounded AI answers)"}`);
     lines.push(`  • Usage: mention @live-web anywhere in a sentence ("latest BTC price @live-web"), or @web-search <query>, @web-fetch <url>`);
+    lines.push(`  • Google AI Mode: mention @live-gemini anywhere ("explain black holes @live-gemini"), or @live-gemini <query>, or @web-search <query> --provider google-ai`);
     return lines.join("\n");
 }
 
@@ -163,17 +201,38 @@ export function parseWebSearchInput(text) {
 }
 
 /**
+ * Detect an inline "@live-gemini" search trigger (Google AI Mode).
+ * Same semantics as parseWebSearchInput: "@live-gemini" ANYWHERE in the
+ * sentence triggers a Google AI Mode search. Returns null when absent,
+ * otherwise `{ query, stripped }` with the token removed.
+ */
+export function parseLiveGeminiInput(text) {
+    const raw = String(text || "");
+    if (!raw) return null;
+    if (!/@live-gemini(?![-\w])/i.test(raw)) return null;
+    const query = raw
+        .replace(/@live-gemini(?![-\w])/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!query) return null;
+    return { query, stripped: true };
+}
+
+/**
  * Leading explicit forms: "@live-web <query>" | "@web-search <query>" |
- * "@websearch <query>" | "@search-web <query>". Returns null when `text`
- * is not such a command, otherwise `{ query, provider }`
+ * "@websearch <query>" | "@search-web <query>" | "@live-gemini <query>".
+ * Returns null when `text` is not such a command, otherwise
+ * `{ query, provider }`
  * (`query === ""` means usage help shown).
  * Inline "--provider <name>" / "--limit N" flags are parsed out.
+ * "@live-gemini <query>" forces provider "google-ai" unless an explicit
+ * --provider flag overrides it.
  */
 export function parseWebSearchCommand(text, settings = {}) {
     const raw = String(text || "").trim();
     const norm = raw.startsWith("@") ? "/" + raw.slice(1) : raw;
     const low = norm.toLowerCase();
-    const heads = ["/live-web", "/web-search", "/websearch", "/search-web"];
+    const heads = ["/live-web", "/web-search", "/websearch", "/search-web", "/live-gemini", "/gemini-search", "/google-search"];
     const head = heads.find((h) => low === h || low.startsWith(h + " "));
     if (!head) return null;
     let body = norm.slice(head.length).trim();
@@ -188,9 +247,16 @@ export function parseWebSearchCommand(text, settings = {}) {
         .replace(/\s--(?:limit|max|max-results|max_results|n)(?:\s+|=)\s*\d+/gi, " ")
         .replace(/\s+/g, " ")
         .trim();
+    // "@live-gemini ..." defaults to the Google AI Mode engine unless the
+    // user passed an explicit --provider flag.
+    const isGeminiHead = ["/live-gemini", "/gemini-search", "/google-search"].includes(head);
+    let effectiveProvider;
+    if (provMatch) effectiveProvider = resolveWebSearchProvider(provider, settings);
+    else if (isGeminiHead) effectiveProvider = resolveWebSearchProvider("google-ai", settings);
+    else effectiveProvider = resolveWebSearchProvider(provider, settings);
     return {
         query,
-        provider: resolveWebSearchProvider(provider, settings),
+        provider: effectiveProvider,
         maxResults: limit === null ? resolveWebSearchLimit(undefined, settings) : resolveWebSearchLimit(limit, settings),
     };
 }
@@ -322,6 +388,73 @@ export function parseDuckInstantAnswer(data) {
         });
     }
     return out;
+}
+
+/** Google wraps outbound links as /url?q=<encoded>&... */
+export function unwrapGoogleHref(href) {
+    const h = String(href || "").trim();
+    if (!h) return "";
+    try {
+        const u = new URL(h, "https://www.google.com");
+        if (u.pathname === "/url") {
+            const q = u.searchParams.get("q");
+            if (q) return q;
+        }
+    } catch {}
+    return h;
+}
+
+export function parseGoogleHtmlResults(html, limit = WEBSEARCH_DEFAULT_MAX_RESULTS) {
+    const n = Math.min(Math.max(Number(limit) || WEBSEARCH_DEFAULT_MAX_RESULTS, 1), WEBSEARCH_MAX_LIMIT);
+    const src = String(html || "");
+    const out = [];
+    const seen = new Set();
+    // Classic Google anchors: <a href="/url?q=https://..."><h3>Title</h3></a>
+    // plus newer <a jsname href="https://..."> variants. Scan generically.
+    const anchorRe = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a\s*>/gi;
+    let m;
+    while ((m = anchorRe.exec(src)) !== null && out.length < n * 3) {
+        let url = decodeHtmlEntities(m[1]);
+        url = unwrapGoogleHref(url);
+        if (!/^https?:\/\//i.test(url)) continue;
+        if (/^https?:\/\/(www\.)?google\.[^/]*(\/|$)/i.test(url)) continue;
+        if (/^https?:\/\/.*\.google\.[^/]*\/search/i.test(url)) continue;
+        if (url.includes("enablejs") || url.includes("httpservice")) continue;
+        const inner = String(m[2] || "");
+        if (/<script|style/i.test(inner)) continue;
+        const title = decodeHtmlEntities(inner.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+        if (!title || title.length < 8 || title.length > 300) continue;
+        if (/^Images|Videos|News|Maps|Shopping|More|All$/i.test(title)) continue;
+        if (seen.has(url)) continue;
+        seen.add(url);
+        out.push({ title: title.slice(0, 300), url, snippet: "" });
+        if (out.length >= n) break;
+    }
+    return out.slice(0, n);
+}
+
+/**
+ * Best-effort extraction of Google's AI Overview / AI Mode answer text
+ * from server-rendered HTML. Google changes markup often; this looks for
+ * common containers and falls back to "" when only the JS shell is served
+ * (datacenter fetches usually get the enablejs challenge).
+ */
+export function parseGoogleAiAnswer(html) {
+    const src = String(html || "");
+    if (!src || src.includes("enablejs")) return "";
+    const candidates = [
+        /<div[^>]*data-attrid="[^"]*dmec[^"]*"[^>]*>([\s\S]{20,4000}?)<\/div\s*>/i,
+        /<div[^>]*(?:class="[^"]*(?:AI-overview|ai-overview|generative|ai-answer)[^"]*")[^>]*>([\s\S]{20,6000}?)<\/div\s*>/i,
+        /<span[^>]*data-ved[^>]*>([\s\S]{40,4000}?)<\/span\s*>/i,
+    ];
+    for (const re of candidates) {
+        const m = src.match(re);
+        if (m) {
+            const text = decodeHtmlEntities(m[1].replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+            if (text && text.length > 40) return text.slice(0, 2000);
+        }
+    }
+    return "";
 }
 
 // --- fetch plumbing ---------------------------------------------------------
@@ -458,6 +591,148 @@ export async function searchTavily(query, settings = {}, fetchFn) {
 }
 
 /**
+ * Gemini API with `google_search` grounding — Google's official AI Mode
+ * backend. Pure REST fetch (no SDK) so `bun test` can inject `fetchFn`.
+ * Returns `{ answer, results }` where results come from groundingChunks /
+ * groundingSupports citation URLs.
+ */
+export async function searchGeminiWithGrounding(query, settings = {}, fetchFn, modelOverride) {
+    const q = String(query || "").trim();
+    if (!q) return { success: false, provider: "google-ai", query: q, results: [], error: "Usage: provide a search query." };
+    const key = getGeminiApiKey(settings);
+    if (!key) {
+        return { success: false, provider: "google-ai", query: q, results: [], error: "Gemini API key is not configured. Set it with @set-api-key gemini <key> (or GEMINI_API_KEY)." };
+    }
+    const model = getGeminiSearchModel(settings, modelOverride);
+    const limit = resolveWebSearchLimit(undefined, settings);
+    const timeoutMs = resolveWebSearchTimeoutMs(settings);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    try {
+        const data = await fetchJson(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: q }] }],
+                tools: [{ google_search: {} }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+            }),
+        }, fetchFn, timeoutMs);
+        const cand = data && Array.isArray(data.candidates) && data.candidates[0] ? data.candidates[0] : null;
+        const parts = (cand && cand.content && Array.isArray(cand.content.parts)) ? cand.content.parts : [];
+        const answer = parts.map((p) => (p && p.text ? p.text : "")).join("").trim();
+        const meta = (cand && cand.groundingMetadata) || {};
+        const chunks = Array.isArray(meta.groundingChunks) ? meta.groundingChunks : [];
+        const results = [];
+        const seen = new Set();
+        for (const c of chunks) {
+            const web = c && c.web ? c.web : null;
+            const urlOut = web && (web.uri || web.url) ? String(web.uri || web.url) : "";
+            const title = web && web.title ? String(web.title) : "";
+            if (!urlOut || !/^https?:\/\//i.test(urlOut) || seen.has(urlOut)) continue;
+            seen.add(urlOut);
+            results.push({
+                title: (title || urlOut).slice(0, 300),
+                url: urlOut,
+                snippet: "",
+            });
+            if (results.length >= limit) break;
+        }
+        // Fallback: some models return inline [1](url) markdown citations.
+        if (results.length === 0 && answer) {
+            const linkRe = /\[([^\]]{3,120})\]\((https?:\/\/[^)\s]+)\)/g;
+            let m;
+            while ((m = linkRe.exec(answer)) !== null && results.length < limit) {
+                if (seen.has(m[2])) continue;
+                seen.add(m[2]);
+                results.push({ title: m[1].slice(0, 300), url: m[2], snippet: "" });
+            }
+        }
+        if (!answer && results.length === 0) {
+            return { success: false, provider: "google-ai", query: q, results: [], error: "Gemini returned an empty grounded answer." };
+        }
+        // When the model answers but cites no URLs, still return the answer
+        // with a single self-reference result so chat grounding works.
+        const finalResults = results.length > 0 ? results : [{
+            title: `Gemini grounded answer for "${q.slice(0, 80)}"`,
+            url: `https://www.google.com/search?q=${encodeURIComponent(q)}&udm=50`,
+            snippet: answer.slice(0, 800),
+        }];
+        return { success: true, provider: "google-ai", query: q, results: finalResults.slice(0, limit), answer: answer.slice(0, 4000), model };
+    } catch (err) {
+        return { success: false, provider: "google-ai", query: q, results: [], error: `Google AI error: ${err.message || String(err)}` };
+    }
+}
+
+/**
+ * Keyless Google scrape: AI Mode (`udm=50`) first, classic search fallback.
+ * Best-effort — Google often serves a JS challenge to datacenter fetches,
+ * in which case this returns success:false and the caller falls back.
+ */
+export async function searchGoogleScrape(query, settings = {}, fetchFn) {
+    const q = String(query || "").trim();
+    if (!q) return { success: false, provider: "google-ai", query: q, results: [], error: "Usage: provide a search query." };
+    const limit = resolveWebSearchLimit(undefined, settings);
+    const timeoutMs = resolveWebSearchTimeoutMs(settings);
+    const headers = {
+        "User-Agent": WEBSEARCH_USER_AGENT,
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+    };
+    const aiUrl = `${GOOGLE_AI_MODE_URL}?q=${encodeURIComponent(q)}&udm=50&hl=en&gl=us&num=10`;
+    const webUrl = `${GOOGLE_SEARCH_URL}?q=${encodeURIComponent(q)}&hl=en&gl=us&num=10`;
+    const [aiSettled, webSettled] = await Promise.allSettled([
+        fetchText(aiUrl, { headers }, fetchFn, timeoutMs),
+        fetchText(webUrl, { headers }, fetchFn, timeoutMs),
+    ]);
+    let answer = "";
+    const merged = [];
+    const seen = new Set();
+    for (const s of [aiSettled, webSettled]) {
+        if (s.status !== "fulfilled" || !s.value) continue;
+        try {
+            if (!answer) answer = parseGoogleAiAnswer(s.value);
+            for (const r of parseGoogleHtmlResults(s.value, limit)) {
+                if (merged.length >= limit) break;
+                if (seen.has(r.url)) continue;
+                seen.add(r.url);
+                merged.push({ ...r, source: "google" });
+            }
+        } catch {}
+        if (merged.length >= limit) break;
+    }
+    if (merged.length === 0 && !answer) {
+        const err = aiSettled.status === "rejected"
+            ? (aiSettled.reason && (aiSettled.reason.message || String(aiSettled.reason)))
+            : "Google returned a JS challenge (no server-rendered results). Set @set-api-key gemini <key> for grounded AI answers.";
+        return { success: false, provider: "google-ai", query: q, results: [], error: `Google AI error: ${err}` };
+    }
+    const results = merged.length > 0 ? merged.slice(0, limit) : [{
+        title: `Google AI Mode answer for "${q.slice(0, 80)}"`,
+        url: aiUrl,
+        snippet: (answer || "").slice(0, 800),
+    }];
+    return { success: true, provider: "google-ai", query: q, results, ...(answer ? { answer: answer.slice(0, 4000) } : {}) };
+}
+
+/**
+ * Google AI Mode entry point (`@live-gemini`, provider `google-ai`).
+ * Tier 1: Gemini API grounding (needs GEMINI_API_KEY).
+ * Tier 2: keyless Google scrape (best-effort).
+ */
+export async function searchGoogleAi(query, settings = {}, fetchFn, modelOverride) {
+    const q = String(query || "").trim();
+    if (!q) return { success: false, provider: "google-ai", query: q, results: [], error: "Usage: provide a search query." };
+    if (isGeminiSearchConfigured(settings)) {
+        const grounded = await searchGeminiWithGrounding(query, settings, fetchFn, modelOverride);
+        if (grounded.success) return grounded;
+        const scrape = await searchGoogleScrape(query, settings, fetchFn);
+        if (scrape.success) return { ...scrape, fallback: true, engineError: grounded.error };
+        return grounded;
+    }
+    return searchGoogleScrape(query, settings, fetchFn);
+}
+
+/**
  * Default entry point. `opts.provider` forces an engine ("auto" default);
  * `opts.maxResults` overrides the configured default for this call only.
  * On failure the forced/keyed engine falls back to DuckDuckGo (reported
@@ -474,6 +749,7 @@ export async function searchWeb(query, settings = {}, opts = {}, fetchFn) {
     const runEngine = (p) => {
         if (p === "brave") return searchBrave(q, merged, fetchFn);
         if (p === "tavily") return searchTavily(q, merged, fetchFn);
+        if (p === "google-ai") return searchGoogleAi(q, merged, fetchFn, opts && (opts.model || opts.geminiModel));
         return searchDuckDuckGo(q, merged, fetchFn);
     };
     if (provider === "auto") {
@@ -551,7 +827,15 @@ export function formatWebResults(res) {
         return `⚠️ Web search error: ${(res && res.error) || "unknown error"}`;
     }
     const results = Array.isArray(res.results) ? res.results : [];
-    const lines = [`🌐 Live web results for: "${res.query || ""}" (via ${res.provider || "web"})`];
+    const isGemini = String((res && res.provider) || "") === "google-ai";
+    const lines = [isGemini
+        ? `🤖 Google AI Mode results for: "${res.query || ""}" (via google-ai)`
+        : `🌐 Live web results for: "${res.query || ""}" (via ${res.provider || "web"})`];
+    if (isGemini && res.answer) {
+        lines.push("");
+        lines.push(`✨ AI answer (${res.model || GEMINI_SEARCH_DEFAULT_MODEL}):`);
+        lines.push(String(res.answer).slice(0, 1500));
+    }
     results.forEach((r, i) => {
         lines.push(`\n[${i + 1}] ${r.title || "(untitled)"}`);
         lines.push(`    🔗 ${r.url || ""}`);
@@ -577,9 +861,14 @@ export function formatPageText(res) {
 export function buildWebSystemBlock(res) {
     if (!res || !res.success) return "";
     const results = (Array.isArray(res.results) ? res.results : []).slice(0, WEBSEARCH_MAX_LIMIT);
-    if (results.length === 0) return "";
+    if (results.length === 0 && !res.answer) return "";
+    const isGemini = String(res.provider || "") === "google-ai";
     const lines = results.map((r, i) => `${i + 1}. "${r.title || "(untitled)"}" — ${r.snippet || "(no snippet)"}\n   Source: ${r.url || ""}`);
-    return `[Live Web Search Results for "${res.query || ""}" (via ${res.provider || "web"}, fetched just now — prefer this over training-data knowledge for current facts)]:\n${lines.join("\n")}\nAnswer using these results where relevant; cite source numbers [1], [2] inline. If the results do not cover the question, say so instead of guessing.`.slice(0, 8000);
+    const head = isGemini
+        ? `[Google AI Mode Results for "${res.query || ""}" (via google-ai, fetched just now — prefer this over training-data knowledge for current facts)]:`
+        : `[Live Web Search Results for "${res.query || ""}" (via ${res.provider || "web"}, fetched just now — prefer this over training-data knowledge for current facts)]:`;
+    const answerBlock = isGemini && res.answer ? `AI answer: ${String(res.answer).slice(0, 3000)}\n` : "";
+    return `${head}\n${answerBlock}${lines.join("\n")}\nAnswer using these results where relevant; cite source numbers [1], [2] inline. If the results do not cover the question, say so instead of guessing.`.slice(0, 8000);
 }
 
 // --- high-level chat integration ---------------------------------------------
@@ -587,12 +876,18 @@ export function buildWebSystemBlock(res) {
 // every surface behaves identically.
 
 /**
- * Detect an inline "@live-web" trigger (or explicit "@live-web" /
- * "@web-search" command) and run the search. Returns `{ triggered: false }` when there is nothing to
+ * Detect an inline "@live-web" / "@live-gemini" trigger (or explicit
+ * "@live-web" / "@live-gemini" / "@web-search" command) and run the search.
+ * Returns `{ triggered: false }` when there is nothing to
  * do (no token, voice command, search disabled, empty query) — callers then
  * continue unchanged. Otherwise `{ triggered: true, query, searchRes, block }`
  * where `block` is the system-prompt text ("" when the search failed —
  * check `searchRes.error` for the reason).
+ *
+ * "@live-gemini" forces the Google AI Mode engine (`google-ai`); "@live-web"
+ * uses the configured provider chain. A leading "@live-gemini <query>"
+ * command is also handled here so every surface (CLI / dashboard /
+ * Telegram / WhatsApp / voice) behaves identically with no caller changes.
  */
 export async function runWebSearchForPrompt(promptText, settings = {}, fetchFn, opts = {}) {
     const raw = String(promptText || "");
@@ -607,9 +902,15 @@ export async function runWebSearchForPrompt(promptText, settings = {}, fetchFn, 
         provider = cmd.provider;
         maxResults = cmd.maxResults;
     } else {
-        const inline = parseWebSearchInput(raw);
-        if (!inline) return { triggered: false };
-        query = inline.query;
+        const geminiInline = parseLiveGeminiInput(raw);
+        if (geminiInline) {
+            query = geminiInline.query;
+            provider = "google-ai";
+        } else {
+            const inline = parseWebSearchInput(raw);
+            if (!inline) return { triggered: false };
+            query = inline.query;
+        }
     }
     if (!query) return { triggered: false };
     try {
@@ -623,5 +924,38 @@ export async function runWebSearchForPrompt(promptText, settings = {}, fetchFn, 
             searchRes: { success: false, provider: "web", query, results: [], error: err.message || String(err) },
             block: "",
         };
+    }
+}
+
+/**
+ * Explicit `@live-gemini` entry point (mirrors runWebSearchForPrompt but
+ * only fires for the Google AI Mode token). Useful for callers that want
+ * to handle the two triggers separately; `runWebSearchForPrompt` already
+ * covers both, so most code should keep calling that.
+ */
+export async function runLiveGeminiForPrompt(promptText, settings = {}, fetchFn, opts = {}) {
+    const raw = String(promptText || "");
+    if (!raw || !isWebSearchEnabled(settings)) return { triggered: false };
+    const cmd = parseWebSearchCommand(raw, settings);
+    if (cmd) {
+        const head = raw.trim().toLowerCase().startsWith("@live-gemini") || raw.trim().toLowerCase().startsWith("/live-gemini");
+        if (!head) return { triggered: false };
+        if (!cmd.query) return { triggered: false, reason: "usage" };
+        try {
+            const searchRes = await searchWeb(cmd.query, settings, { provider: cmd.provider, maxResults: cmd.maxResults, ...(opts || {}) }, fetchFn);
+            if (!searchRes.success) return { triggered: true, query: cmd.query, searchRes, block: "" };
+            return { triggered: true, query: cmd.query, searchRes, block: buildWebSystemBlock(searchRes) };
+        } catch (err) {
+            return { triggered: true, query: cmd.query, searchRes: { success: false, provider: "google-ai", query: cmd.query, results: [], error: err.message || String(err) }, block: "" };
+        }
+    }
+    const inline = parseLiveGeminiInput(raw);
+    if (!inline) return { triggered: false };
+    try {
+        const searchRes = await searchWeb(inline.query, settings, { provider: "google-ai", ...(opts || {}) }, fetchFn);
+        if (!searchRes.success) return { triggered: true, query: inline.query, searchRes, block: "" };
+        return { triggered: true, query: inline.query, searchRes, block: buildWebSystemBlock(searchRes) };
+    } catch (err) {
+        return { triggered: true, query: inline.query, searchRes: { success: false, provider: "google-ai", query: inline.query, results: [], error: err.message || String(err) }, block: "" };
     }
 }

@@ -566,8 +566,8 @@ export class LocalVoiceSocketBridge {
                     }
                 }
 
-                // Live web search - @live-web / @web-search / @websearch / @web-fetch / @web-status
-                // (inline "@live-web within a sentence" is injected into LLM context below).
+                // Live web search - @live-web / @live-gemini / @web-search / @websearch / @web-fetch / @web-status
+                // (inline "@live-web / @live-gemini within a sentence" is injected into LLM context below).
                 {
                     const { parseWebSearchCommand, parseWebFetchCommand, parseWebStatusCommand, searchWeb, formatWebResults, fetchPageText, formatPageText, formatWebStatus } = await import("./websearch.js");
                     if (parseWebStatusCommand(trimmedText)) {
@@ -577,7 +577,7 @@ export class LocalVoiceSocketBridge {
                     const webSearchCmd = parseWebSearchCommand(trimmedText, this.settings);
                     if (webSearchCmd) {
                         if (!webSearchCmd.query) {
-                            done('⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]\nInline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")');
+                            done('⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N]\nInline forms: @live-web ("latest BTC price @live-web") or @live-gemini ("explain black holes @live-gemini")');
                             return;
                         }
                         const res = await searchWeb(webSearchCmd.query, this.settings, { provider: webSearchCmd.provider, maxResults: webSearchCmd.maxResults });
@@ -1162,6 +1162,11 @@ export class LocalVoiceSocketBridge {
             this.server = Bun.serve({
                 port,
                 hostname: BIND_HOST,
+                // Voice turns run local Whisper STT + local MMS-TTS + LLM
+                // inference, each of which can exceed Bun's default ~10s
+                // idle timeout (closed with an empty reply). Keep slow
+                // local-TTS turns alive (see dashboard.js idleTimeout: 255).
+                idleTimeout: 255,
                 fetch: (req, server) => {
                     const url = new URL(req.url);
                     if (url.pathname === "/ws") {

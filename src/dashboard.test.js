@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
-import { DashboardServer, shouldStartDashboard, resolveDashboardPort, DASHBOARD_DEFAULT_PORT } from "./dashboard.js";
+import { DashboardServer, shouldStartDashboard, shouldStartAiFriendDash, isAiFriendDashEnabled, resolveDashboardPort, DASHBOARD_DEFAULT_PORT } from "./dashboard.js";
 import { lockAllScopes } from "./security.js";
 
 // handleChat persists real sessions (same as the voice bridge tests), so
@@ -68,6 +68,96 @@ describe("dashboard flag parsing", () => {
     test("defaults to 8768", () => {
         expect(resolveDashboardPort({}, [], {})).toBe(DASHBOARD_DEFAULT_PORT);
         expect(DASHBOARD_DEFAULT_PORT).toBe(8768);
+    });
+
+    test("--aifrienddash implies the dashboard", () => {
+        const r = shouldStartDashboard({}, ["bun", "index.js", "--aifrienddash"], {});
+        expect(r.start).toBe(true);
+        expect(r.reason).toBe("aifrienddash-flag");
+    });
+});
+
+describe("aifrienddash flag parsing", () => {
+    test("starts with --aifrienddash", () => {
+        const r = shouldStartAiFriendDash({}, ["bun", "index.js", "--aifrienddash"], {});
+        expect(r.enabled).toBe(true);
+        expect(r.reason).toBe("flag");
+    });
+
+    test("starts with single-dash -aifrienddash", () => {
+        const r = shouldStartAiFriendDash({}, ["bun", "index.js", "-aifrienddash"], {});
+        expect(r.enabled).toBe(true);
+    });
+
+    test("--no-aifrienddash wins over --aifrienddash", () => {
+        const r = shouldStartAiFriendDash({}, ["bun", "index.js", "--aifrienddash", "--no-aifrienddash"], {});
+        expect(r.enabled).toBe(false);
+        expect(r.reason).toBe("disabled-flag");
+    });
+
+    test("env AIFRIENDDASH_ENABLED=1 starts", () => {
+        const r = shouldStartAiFriendDash({}, ["bun", "index.js"], { AIFRIENDDASH_ENABLED: "1" });
+        expect(r.enabled).toBe(true);
+        expect(r.reason).toBe("env");
+    });
+
+    test("settings.aifrienddash_enabled starts", () => {
+        const r = shouldStartAiFriendDash({ aifrienddash_enabled: true }, ["bun", "index.js"], {});
+        expect(r.enabled).toBe(true);
+        expect(r.reason).toBe("settings");
+    });
+
+    test("off by default", () => {
+        expect(isAiFriendDashEnabled({}, ["bun", "index.js"], {})).toBe(false);
+    });
+
+    test("--no-dashboard wins over --aifrienddash", () => {
+        const r = shouldStartDashboard({}, ["bun", "index.js", "--aifrienddash", "--no-dashboard"], {});
+        expect(r.start).toBe(false);
+    });
+});
+
+describe("aifrienddash routes", () => {
+    function dashServer(settings = {}) {
+        return new DashboardServer({
+            settings: { model: "test-model", server_url: "http://127.0.0.1:11434", mem_limit: 4, auto_learning_enabled: false, ...settings },
+            characterStore: {
+                active_character: "main",
+                characters: [{ id: "main", name: "Main", model: "m", templates: ["Be helpful"], selected_templates: [0] }],
+            },
+            services: {
+                unifiedChat: async () => ({ content: "hello from llm" }),
+            },
+        });
+    }
+
+    test("/api/aifrienddash-status reflects the gate", async () => {
+        const on = dashServer({ aifrienddash_enabled: true });
+        const resOn = await on.handleRequest(new Request("http://localhost/api/aifrienddash-status"));
+        expect(resOn.status).toBe(200);
+        expect((await resOn.json()).enabled).toBe(true);
+        const off = dashServer({});
+        const resOff = await off.handleRequest(new Request("http://localhost/api/aifrienddash-status"));
+        expect((await resOff.json()).enabled).toBe(false);
+    });
+
+    test("/aifrienddash serves HTML when enabled, 404 when disabled", async () => {
+        const on = dashServer({ aifrienddash_enabled: true });
+        const page = await on.handleRequest(new Request("http://localhost/aifrienddash"));
+        expect(page.status).toBe(200);
+        expect(page.headers.get("content-type")).toContain("text/html");
+        const html = await page.text();
+        expect(html).toContain("AI bud pro");
+        expect(html).toContain("/api/chat");
+        const off = dashServer({});
+        const missing = await off.handleRequest(new Request("http://localhost/aifrienddash"));
+        expect(missing.status).toBe(404);
+    });
+
+    test("/api/health reports aifrienddash", async () => {
+        const s = dashServer({ aifrienddash_enabled: true });
+        const res = await s.handleRequest(new Request("http://localhost/api/health"));
+        expect((await res.json()).aifrienddash).toBe(true);
     });
 });
 
@@ -236,4 +326,43 @@ describe("dashboard chat", () => {
         }
         expect(err).toBeTruthy();
     });
+});
+
+describe("dashboard server idle timeout (local TTS regression)", () => {
+    test("/api/tts survives slow local synthesis (>10s, no empty reply)", async () => {
+        const port = 18927;
+        const s = new DashboardServer({
+            settings: { model: "test-model", server_url: "http://127.0.0.1:11434", tts_engine: "local" },
+            characterStore: {
+                active_character: "main",
+                characters: [{ id: "main", name: "Main", model: "m", templates: ["Be helpful"], selected_templates: [0] }],
+            },
+            services: {
+                unifiedChat: async () => ({ content: "hi" }),
+                // Local MMS-TTS takes ~20s+ per reply on CPU; Bun's default
+                // ~10s idle timeout used to close the connection with an
+                // empty reply (Chrome: net::ERR_EMPTY_RESPONSE), leaving the
+                // avatar silent. The stub simulates that slowness.
+                synthesizeSpeech: async (text, outPath) => {
+                    await new Promise((r) => setTimeout(r, 12000));
+                    fs.writeFileSync(outPath, Buffer.from([82, 73, 70, 70, 1, 2, 3, 4]));
+                    return { audioPath: outPath };
+                },
+            },
+        });
+        s.start(port);
+        try {
+            const res = await fetch(`http://127.0.0.1:${port}/api/tts`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: "hello", engine: "local" }),
+            });
+            expect(res.status).toBe(200);
+            expect(res.headers.get("content-type")).toContain("audio/wav");
+            const buf = Buffer.from(await res.arrayBuffer());
+            expect(buf.length).toBe(8);
+        } finally {
+            s.stop();
+        }
+    }, 60000);
 });

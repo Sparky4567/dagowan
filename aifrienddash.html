@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI bud pro — AI Friend dashboard</title>
+<style>
+:root{
+  color-scheme:light;--font-scale:1;--radius:8px;
+  --background:oklch(0.995 0.001 90);--foreground:oklch(0.27 0.01 60);
+  --panel:oklch(1 0 0);--panel-2:oklch(0.97 0.004 90);--muted:oklch(0.55 0.01 60);
+  --border:oklch(0.9 0.006 90);--primary:oklch(0.55 0.12 245);--primary-fg:oklch(0.99 0 0);
+  --accent:oklch(0.93 0.02 245);--danger:oklch(0.58 0.22 27);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.dark{
+  color-scheme:dark;--background:oklch(0.21 0.008 60);--foreground:oklch(0.91 0.006 90);
+  --panel:oklch(0.25 0.008 60);--panel-2:oklch(0.29 0.008 60);--muted:oklch(0.69 0.01 80);
+  --border:oklch(0.34 0.008 60);--primary:oklch(0.7 0.12 245);--primary-fg:oklch(0.18 0.01 60);
+  --accent:oklch(0.33 0.03 245);--danger:oklch(0.65 0.18 27);
+}
+*{box-sizing:border-box}
+html,body,#root{height:100%;max-width:100%;overflow-x:hidden}
+body{margin:0;background:var(--background);color:var(--foreground)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.app-shell{width:100%;max-width:100vw;min-height:100%;display:grid;grid-template-rows:auto auto auto auto 1fr;grid-template-columns:minmax(0,1fr);overflow-x:hidden}
+.app-shell.chrome-hidden{display:flex;flex-direction:column}
+.chrome-hidden .topbar,.chrome-hidden .error-bar,.chrome-hidden .search-bar,.chrome-hidden .session-bar{display:none}
+.topbar{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0;padding:12px clamp(14px,3vw,32px);border-bottom:1px solid var(--border);background:var(--panel)}
+.brand,.toolbar,.composer-actions,.message-meta,.error-bar,.live-strip{display:flex;align-items:center}
+.brand{gap:12px;min-width:0}
+.brand-mark{width:42px;height:42px;border-radius:var(--radius);display:grid;place-items:center;background:var(--primary);color:var(--primary-fg);font-size:22px;flex:0 0 auto}
+.brand h1{font-size:calc(1.05rem * var(--font-scale));margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand p{margin:2px 0 0;font-size:calc(0.82rem * var(--font-scale));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52vw;color:var(--muted)}
+.toolbar,.composer-actions{gap:8px;min-width:0}
+.icon-button,.secondary-button,.send-button{max-width:100%;min-height:40px;border:1px solid var(--border);border-radius:var(--radius);display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--panel);color:var(--foreground);line-height:1;white-space:nowrap}
+.icon-button{width:40px;padding:0}
+.icon-button.compact{width:32px;min-height:32px}
+.icon-button.danger{color:var(--danger)}
+.secondary-button,.send-button{padding:0 14px}
+.send-button{border-color:transparent;background:var(--primary);color:var(--primary-fg);font-weight:650}
+.send-button:disabled{cursor:not-allowed;opacity:0.55}
+.call-button{background:var(--accent);color:var(--foreground)}
+.call-button.active{background:var(--danger);color:#fff}
+.error-bar{justify-content:space-between;gap:12px;margin:10px clamp(14px,3vw,32px) 0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel)}
+.error-bar button{border:0;background:transparent;color:inherit}
+.search-bar{min-height:48px;display:flex;align-items:center;gap:10px;min-width:0;margin:10px clamp(14px,3vw,32px) 0;padding:6px 10px 6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);color:var(--muted)}
+.search-bar input{width:100%;min-width:0;border:0;outline:none;background:transparent;color:var(--foreground);font-size:calc(0.96rem * var(--font-scale))}
+.session-bar{min-height:50px;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:8px;min-width:0;margin:10px clamp(14px,3vw,32px) 0}
+.session-bar select{width:100%;min-width:0;min-height:40px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);color:var(--foreground);padding:0 10px;outline:none}
+.chat-window{min-height:0;min-width:0;display:flex;flex-direction:column;padding:12px clamp(14px,3vw,32px) 18px;gap:10px}
+.chrome-hidden .chat-window{flex:1 1 auto;min-height:0;padding-top:8px}
+.search-results{display:flex;align-items:center;gap:12px;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-2);color:var(--muted);font-size:calc(0.84rem * var(--font-scale));flex-wrap:wrap}
+.search-results strong{color:var(--foreground)}
+.memory-result-list{display:flex;gap:8px;min-width:0;overflow:auto}
+.memory-result-list button{max-width:260px;min-height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.messages{flex:1 1 auto;min-height:16rem;max-height:calc(100vh - 420px);overflow:auto;display:flex;flex-direction:column;gap:16px;padding:10px 0 14px}
+.chrome-hidden .messages{max-height:none}
+.empty-state{min-height:100%;display:grid;place-content:center;justify-items:center;text-align:center;gap:10px}
+.empty-icon{width:42px;height:42px;border-radius:var(--radius);display:grid;place-items:center;background:var(--primary);color:var(--primary-fg);font-size:22px}
+.empty-state h2{margin:8px 0 0;font-size:calc(1.35rem * var(--font-scale))}
+.empty-state p{max-width:36rem;margin:0;font-size:calc(0.98rem * var(--font-scale));color:var(--muted)}
+.message{width:min(860px,100%);min-width:0;padding:14px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);line-height:1.65;font-size:calc(1rem * var(--font-scale));white-space:pre-wrap;overflow-wrap:anywhere}
+.message.user{align-self:flex-end;background:var(--accent)}
+.message.assistant{align-self:flex-start}
+.message p{margin:8px 0 0}
+.message-meta{justify-content:space-between;gap:12px;font-size:calc(0.78rem * var(--font-scale));color:var(--muted)}
+.message-meta span{font-weight:700;color:var(--foreground)}
+.message-tools{display:inline-flex;align-items:center;gap:6px}
+.live-strip{flex:0 0 auto;min-height:58px;display:flex;align-items:center;gap:12px;padding:8px 4px;font-size:calc(0.85rem * var(--font-scale));color:var(--muted)}
+.live-strip.active{color:var(--foreground)}
+.live-avatar{position:relative;width:66px;height:66px;flex:0 0 66px;display:grid;place-items:center;opacity:0.78;transform:scale(0.94);transition:opacity 160ms ease,transform 160ms ease,filter 160ms ease;font-size:34px}
+.live-character-3d{width:100%;height:100%}
+.live-character-3d canvas{display:block;width:100%;height:100%}
+.live-avatar.listening,.live-avatar.thinking,.live-avatar.speaking{opacity:1;transform:scale(1)}
+.live-copy{min-width:0;flex:1}
+.live-copy span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.speech-review{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-2)}
+.speech-review strong{display:block;font-size:calc(0.9rem * var(--font-scale))}
+.speech-review p{margin:5px 0 0;line-height:1.45}
+.speech-review-actions{display:flex;gap:8px;flex:0 0 auto}
+.composer{flex:0 0 auto;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;min-width:0;max-width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel)}
+.composer textarea{min-width:0;min-height:48px;max-height:180px;resize:vertical;padding:12px;border:0;background:transparent;color:var(--foreground);line-height:1.5;font-size:calc(1rem * var(--font-scale));outline:none}
+.modal-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:18px;background:rgb(0 0 0 / 42%)}
+.settings-panel{width:min(880px,100%);min-width:0;max-height:min(780px,94vh);display:grid;grid-template-rows:auto 1fr auto;gap:18px;padding:18px;overflow:hidden;border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);box-shadow:0 24px 70px rgb(0 0 0 / 28%)}
+.settings-panel header{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:0}
+.settings-panel footer{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:0}
+.settings-panel h2{margin:0;font-size:calc(1.2rem * var(--font-scale))}
+.settings-panel p{margin:4px 0 0;font-size:calc(0.86rem * var(--font-scale));color:var(--muted)}
+.settings-grid{overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding-right:4px}
+.settings-grid label{display:grid;gap:7px;min-width:0}
+.settings-grid label>span{font-size:calc(0.82rem * var(--font-scale));color:var(--muted);font-weight:700}
+.settings-panel textarea,.settings-panel input,.settings-panel select{width:100%;min-height:40px;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);color:var(--foreground);outline:none}
+.settings-panel textarea{resize:vertical;line-height:1.45}
+.settings-grid .wide,.settings-grid .data-portability,.settings-grid .memory-manager,.settings-grid .checkbox-row{grid-column:1/-1}
+.checkbox-row{display:flex !important;align-items:center;gap:10px !important}
+.checkbox-row input{width:18px;min-height:18px}
+.checkbox-row span{display:inline-flex;align-items:center;gap:6px;color:var(--foreground) !important}
+.data-portability{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-2)}
+.data-portability h3{margin:0;font-size:calc(1rem * var(--font-scale))}
+.data-actions{display:flex;flex-wrap:wrap;gap:8px;flex:0 0 auto}
+.memory-manager{display:grid;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-2)}
+.memory-manager-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.memory-manager-heading h3{margin:0;font-size:calc(1rem * var(--font-scale))}
+.memory-add-row{display:flex;align-items:center;gap:8px}
+.memory-list{display:grid;gap:8px;max-height:230px;overflow:auto}
+.memory-item{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel)}
+.memory-item p{min-width:0;margin:0;line-height:1.45;font-size:calc(0.9rem * var(--font-scale))}
+@media (max-width:720px){
+  .topbar{min-height:64px;gap:8px}
+  .composer{grid-template-columns:1fr}
+  .composer-actions{justify-content:flex-end}
+  .settings-grid{grid-template-columns:1fr}
+  .session-bar{grid-template-columns:1fr auto auto}
+  .session-bar .secondary-button{grid-column:1/-1}
+  .messages{max-height:none}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.185.1/build/three.module.js"}}</script>
+</head>
+<body>
+<div id="root">
+<main class="app-shell" id="appShell">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🤖</span>
+      <div><h1>AI bud pro</h1><p id="brandSub">connecting…</p></div>
+    </div>
+    <div class="toolbar">
+      <button class="icon-button" id="themeBtn" title="Toggle theme">🌙</button>
+      <button class="icon-button" id="settingsBtn" title="Settings">⚙️</button>
+      <button class="icon-button" id="hideBtn" title="Hide controls">🙈</button>
+    </div>
+  </header>
+  <div class="error-bar" id="errorBar" style="display:none"><span id="errorText"></span><button id="errorDismiss" title="Dismiss">✕</button></div>
+  <section class="search-bar" aria-label="Search conversations and memories">
+    <span>🔍</span>
+    <input id="searchInput" placeholder="Search conversations and memories" />
+    <button class="icon-button compact" id="searchClear" title="Clear search" style="display:none">✕</button>
+  </section>
+  <section class="session-bar" aria-label="Conversation sessions">
+    <button class="secondary-button" id="newChatBtn">💬 New conversation</button>
+    <select id="sessionSelect" aria-label="Open conversation"></select>
+    <button class="icon-button" id="renameBtn" title="Rename conversation">✏️</button>
+    <button class="icon-button danger" id="deleteBtn" title="Delete conversation">🗑</button>
+  </section>
+  <section class="chat-window">
+    <aside class="search-results" id="searchResults" style="display:none" aria-live="polite"></aside>
+    <div class="messages" id="messages"></div>
+    <div class="live-strip" id="liveStrip">
+      <div class="live-avatar" id="liveAvatar" aria-hidden="true"><div class="live-character-3d" id="avatarMount"></div></div>
+      <div class="live-copy"><span id="liveCopy">Live conversation off</span></div>
+      <button class="icon-button compact" id="popoutBtn" title="Pop out character (/aifriend)" type="button">↗</button>
+    </div>
+    <section class="speech-review" id="speechReview" style="display:none" aria-live="polite">
+      <div><strong>Is this what you tried to say?</strong><p id="speechReviewText"></p></div>
+      <div class="speech-review-actions">
+        <button class="send-button" id="speechYes">✓ Yes</button>
+        <button class="secondary-button" id="speechEdit">✕ Edit</button>
+      </div>
+    </section>
+    <form class="composer" id="composer">
+      <textarea id="draft" rows="2" placeholder="Message AI bud pro"></textarea>
+      <div class="composer-actions">
+        <button type="button" class="icon-button" id="showBtn" title="Show controls" style="display:none">🐵</button>
+        <button type="button" class="send-button call-button" id="callBtn" title="Start live conversation">📞 Call</button>
+        <button type="button" class="icon-button" id="clearBtn" title="Clear chat">🗑</button>
+        <button type="submit" class="send-button" id="sendBtn">➤ Send</button>
+      </div>
+    </form>
+  </section>
+  <div class="modal-backdrop" id="settingsModal" style="display:none">
+    <section class="settings-panel" role="dialog" aria-modal="true">
+      <header>
+        <div><h2>Settings</h2><p>Server connection and chat preferences. Server fields save to the dagowan backend.</p></div>
+        <button class="icon-button" id="settingsClose" title="Close settings">✕</button>
+      </header>
+      <div class="settings-grid">
+        <label><span>Ollama server URL</span><input id="setServerUrl" /></label>
+        <label><span>Memory window (mem_limit)</span><input id="setMemLimit" type="number" min="1" max="100" /></label>
+        <label><span>Model</span><select id="setModel"><option value="">loading…</option></select></label>
+        <div style="display:flex;align-items:flex-end"><button class="secondary-button" id="loadModelsBtn" type="button">🔄 Load models</button></div>
+        <label><span>Persona</span><select id="setCharacter"></select></label>
+        <label><span>Theme</span><select id="setTheme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label><span>Font size</span><input id="setFontScale" type="range" min="0.85" max="1.35" step="0.05" /></label>
+        <label class="checkbox-row"><input type="checkbox" id="setReadAloud" /><span>🔊 Read AI replies aloud</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="setConfirmSpeech" /><span>Confirm recognized speech before sending</span></label>
+        <section class="memory-manager wide">
+          <div class="memory-manager-heading"><div><h3>Memories</h3><p>Stored preferences used by the assistant (server-side).</p></div><span id="memCount">0</span></div>
+          <div class="memory-add-row"><input id="newMemory" placeholder="Add a memory (/remember … works in chat too)" /><button class="secondary-button" id="addMemoryBtn" type="button">➕ Add</button></div>
+          <div class="memory-list" id="memoryList"></div>
+        </section>
+        <section class="data-portability wide">
+          <div><h3>Export</h3><p>Download the active conversation as JSON.</p></div>
+          <div class="data-actions"><button class="secondary-button" id="exportBtn" type="button">⬇ Export</button></div>
+        </section>
+      </div>
+      <footer>
+        <button class="secondary-button" id="resetBtn" type="button">Reset</button>
+        <button class="send-button" id="saveSettingsBtn" type="button">✓ Save settings</button>
+      </footer>
+    </section>
+  </div>
+  <div class="modal-backdrop" id="renameModal" style="display:none">
+    <section class="settings-panel" role="dialog" aria-modal="true" style="max-width:480px">
+      <header><div><h2>Rename conversation</h2></div><button class="icon-button" id="renameClose" title="Cancel">✕</button></header>
+      <div class="settings-grid"><label class="wide"><span>Title</span><input id="renameInput" /></label></div>
+      <footer><button class="secondary-button" id="renameCancel" type="button">Cancel</button><button class="send-button" id="renameSave" type="button">✓ Save</button></footer>
+    </section>
+  </div>
+</main>
+</div>
+<script type="module">
+import * as THREE from 'three';
+const $=id=>document.getElementById(id);
+const PREF_KEY='aifrienddash-prefs';
+const prefs=Object.assign({theme:'system',fontScale:1,readAloud:false,confirmSpeech:true},JSON.parse(localStorage.getItem(PREF_KEY)||'{}'));
+function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify(prefs));}catch{}}
+const S={settings:{},health:null,characters:[],characterId:null,sessions:[],activeSessionId:null,messages:[],models:{ollama:[],cloud:{},active:''},memories:[],search:'',sending:false,liveState:'idle',liveListening:false,liveTranscript:'',chromeHidden:false,uid:0};
+const SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition||null;
+let recognition=null,shouldListen=false,finalTranscript='',silenceTimer=null;
+function setError(t){if(!t){$('errorBar').style.display='none';return;}$('errorText').textContent=t;$('errorBar').style.display='flex';}
+$('errorDismiss').onclick=()=>setError('');
+async function api(p,o={}){const r=await fetch(p,{headers:{'Content-Type':'application/json'},...o});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j;}
+function esc(s){return String(s??'');}
+function msgId(){return 'm'+(++S.uid)+Date.now().toString(36);}
+function applyPrefs(){
+  const dark=prefs.theme==='dark'||(prefs.theme==='system'&&(window.matchMedia?.('(prefers-color-scheme: dark)').matches??false));
+  document.documentElement.classList.toggle('dark',dark);
+  document.documentElement.style.setProperty('--font-scale',String(prefs.fontScale));
+  $('themeBtn').textContent=dark?'☀️':'🌙';
+  $('appShell').classList.toggle('chrome-hidden',S.chromeHidden);
+  $('showBtn').style.display=S.chromeHidden?'':'none';
+  $('setTheme').value=prefs.theme;$('setFontScale').value=String(prefs.fontScale);
+  $('setReadAloud').checked=!!prefs.readAloud;$('setConfirmSpeech').checked=!!prefs.confirmSpeech;
+}
+$('themeBtn').onclick=()=>{prefs.theme=document.documentElement.classList.contains('dark')?'light':'dark';savePrefs();applyPrefs();};
+$('hideBtn').onclick=()=>{S.chromeHidden=true;applyPrefs();};
+$('showBtn').onclick=()=>{S.chromeHidden=false;applyPrefs();};
+$('settingsBtn').onclick=()=>{openSettings();};
+$('settingsClose').onclick=()=>{$('settingsModal').style.display='none';};
+$('popoutBtn').onclick=()=>{try{window.open('/aifriend','dagowan-aifriend','width=460,height=760');}catch(e){setError('Could not open character: '+e.message);}};
+// ---- mini avatar: port of LiveCharacter3D.tsx ----
+let setAvatarState=()=>{};
+try{
+  const mount=$('avatarMount');
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(32,1,0.1,100);
+  camera.position.set(0,0.05,6.4);
+  const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+  renderer.setClearColor(0x000000,0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  mount.appendChild(renderer.domElement);
+  const face=new THREE.Group();face.position.y=-0.05;scene.add(face);
+  const eyeShape=()=>{const s=new THREE.Shape();s.moveTo(-0.52,0);s.bezierCurveTo(-0.34,0.38,0.32,0.38,0.54,0);s.bezierCurveTo(0.3,-0.32,-0.32,-0.32,-0.52,0);return new THREE.ShapeGeometry(s,24);};
+  const eyeMat=new THREE.MeshStandardMaterial({color:0xffef7a,roughness:0.14,emissive:0xffbf00,emissiveIntensity:1.15,side:THREE.DoubleSide});
+  const rimMat=new THREE.MeshStandardMaterial({color:0x08090f,roughness:0.38,emissive:0x101224,emissiveIntensity:0.1,side:THREE.DoubleSide});
+  const shineMat=new THREE.MeshStandardMaterial({color:0xffffdc,roughness:0.1,emissive:0xfff7b0,emissiveIntensity:1.75});
+  const sparkMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.08,emissive:0xffffff,emissiveIntensity:1.45});
+  const pupilMat=new THREE.MeshStandardMaterial({color:0x050608,roughness:0.25});
+  const noseMat=new THREE.MeshStandardMaterial({color:0xff86bd,roughness:0.34,emissive:0x4a0c24,emissiveIntensity:0.18});
+  const mouthMat=new THREE.MeshStandardMaterial({color:0xff5fa0,roughness:0.3,emissive:0x8a0a32,emissiveIntensity:0.34});
+  const M=(g,m,p,sc=[1,1,1],r=[0,0,0])=>{const me=new THREE.Mesh(g,m);me.position.set(...p);me.scale.set(...sc);me.rotation.set(...r);face.add(me);return me;};
+  const eyeG=eyeShape(),rimG=eyeShape(),pupG=new THREE.SphereGeometry(0.07,18,12),shG=new THREE.SphereGeometry(0.032,12,8),tiG=new THREE.SphereGeometry(0.018,10,8),noG=new THREE.ConeGeometry(0.08,0.12,3),moG=new THREE.SphereGeometry(0.12,24,14);
+  const lRim=M(rimG,rimMat,[-0.76,0.38,0],[1.28,0.78,1],[0,0,0.1]),rRim=M(rimG,rimMat,[0.76,0.38,0],[1.28,0.78,1],[0,0,-0.1]);
+  const lEye=M(eyeG,eyeMat,[-0.76,0.38,0.035],[1.08,0.62,1],[0,0,0.1]),rEye=M(eyeG,eyeMat,[0.76,0.38,0.035],[1.08,0.62,1],[0,0,-0.1]);
+  const lPup=M(pupG,pupilMat,[-0.76,0.38,0.07],[0.38,2.12,0.08]),rPup=M(pupG,pupilMat,[0.76,0.38,0.07],[0.38,2.12,0.08]);
+  M(shG,shineMat,[-0.98,0.55,0.09],[1.7,1.7,0.18]);M(shG,shineMat,[0.54,0.55,0.09],[1.7,1.7,0.18]);
+  M(tiG,sparkMat,[-0.62,0.5,0.095],[1.2,1.2,0.18]);M(tiG,sparkMat,[0.9,0.5,0.095],[1.2,1.2,0.18]);
+  M(tiG,sparkMat,[-0.9,0.24,0.095],[0.9,0.9,0.18]);M(tiG,sparkMat,[0.62,0.24,0.095],[0.9,0.9,0.18]);
+  const nose=M(noG,noseMat,[0,-0.13,0.08],[1.65,1.1,0.88],[Math.PI/2,0,Math.PI/6]);
+  const mouth=M(moG,mouthMat,[0,-0.5,0.08],[1.08,0.12,0.12]);
+  const key=new THREE.DirectionalLight(0xffffff,2.9);key.position.set(2.4,3.2,4.2);scene.add(key);
+  const rim=new THREE.DirectionalLight(0x6ea8ff,2.0);rim.position.set(-3.3,1.4,2.2);scene.add(rim);
+  scene.add(new THREE.AmbientLight(0xffffff,1.15));
+  const clock=new THREE.Clock();
+  const fit=()=>{const r=mount.getBoundingClientRect();const s=Math.max(1,Math.floor(Math.min(r.width||66,r.height||66)));renderer.setSize(s,s,false);camera.aspect=1;camera.updateProjectionMatrix();};
+  new ResizeObserver(fit).observe(mount);fit();
+  setAvatarState=(st)=>{S.liveState=st;const el=$('liveAvatar');el.className='live-avatar '+st;renderLive();};
+  (function animate(){
+    const e=clock.getElapsedTime(),cur=S.liveState,act=cur!=='idle';
+    const mo=cur==='speaking'?Math.abs(Math.sin(e*18)):0;
+    const lp=cur==='listening'?Math.sin(e*7)*0.035:0;
+    const tt=cur==='thinking'?Math.sin(e*1.8)*0.24:Math.sin(e*0.75)*0.1;
+    const bl=Math.sin(e*1.7)>0.985?0.18:1;
+    face.rotation.y=tt*0.3;face.rotation.x=Math.sin(e*0.9)*0.025;
+    face.position.y=-0.05+Math.sin(e*(act?2.2:1.2))*(act?0.055:0.03);
+    face.scale.setScalar(1.08+lp+mo*0.018);
+    mouth.scale.y=0.12+mo*1.52;mouth.scale.x=1.08+mo*0.34;mouth.position.y=-0.5-mo*0.055;nose.position.y=-0.13+mo*0.012;
+    lEye.scale.y=(cur==='thinking'?0.54:0.62)*bl;rEye.scale.y=lEye.scale.y;
+    lRim.scale.y=(cur==='thinking'?0.68:0.78)*bl;rRim.scale.y=lRim.scale.y;
+    lPup.scale.y=(cur==='thinking'?1.02:1.26)*bl;rPup.scale.y=lPup.scale.y;
+    renderer.render(scene,camera);requestAnimationFrame(animate);
+  })();
+}catch(err){$('avatarMount').textContent='🤖';setAvatarState=(st)=>{S.liveState=st;renderLive();};}
+function renderLive(){
+  const strip=$('liveStrip');
+  strip.classList.toggle('active',S.liveListening||S.liveState!=='idle');
+  $('liveCopy').textContent=S.liveState==='listening'?(S.liveTranscript||'Listening'):S.liveState==='thinking'?'AI bud pro is thinking':S.liveState==='speaking'?'AI bud pro is speaking':S.liveListening?'Live conversation ready':'Live conversation off';
+  const cb=$('callBtn');
+  cb.classList.toggle('active',S.liveListening);
+  cb.textContent=S.liveListening?'📞 End':'📞 Call';
+  cb.disabled=!SpeechRec;
+  cb.title=SpeechRec?(S.liveListening?'End live conversation':'Start live conversation'):'Voice input not supported in this browser';
+}
+// ---- sessions / messages ----
+function renderSessions(){
+  const sel=$('sessionSelect');sel.innerHTML='';
+  const q=S.search.trim().toLowerCase();
+  const list=[...S.sessions].sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')));
+  const filtered=q?list.filter(s=>(s.title||'').toLowerCase().includes(q)):list;
+  for(const s of filtered){const o=document.createElement('option');o.value=s.id;o.textContent=s.title||'(untitled)';if(s.id===S.activeSessionId)o.selected=true;sel.appendChild(o);}
+  if(!filtered.length){const o=document.createElement('option');o.value='';o.textContent='(no conversations)';sel.appendChild(o);}
+}
+function renderMessages(){
+  const box=$('messages');box.innerHTML='';
+  const q=S.search.trim().toLowerCase();
+  const msgs=q?S.messages.filter(m=>(m.content||'').toLowerCase().includes(q)):S.messages;
+  const sr=$('searchResults');
+  if(q){
+    const memHits=S.memories.filter(m=>m.toLowerCase().includes(q));
+    sr.style.display='flex';sr.innerHTML='';
+    const a=document.createElement('div');a.innerHTML='<strong></strong> conversations';a.querySelector('strong').textContent=String(S.sessions.filter(s=>(s.title||'').toLowerCase().includes(q)).length);sr.appendChild(a);
+    const b=document.createElement('div');b.innerHTML='<strong></strong> memories';b.querySelector('strong').textContent=String(memHits.length);sr.appendChild(b);
+    if(!msgs.length&&!memHits.length){box.innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><h2>No conversation matches</h2><p>Matching stored memories appear above when available.</p></div>';return;}
+  } else sr.style.display='none';
+  if(!msgs.length&&!q){box.innerHTML='<div class="empty-state"><div class="empty-icon">🤖</div><h2>Start a conversation</h2><p>Pick a model in settings, then chat here. @commands work too — try @help.</p></div>';return;}
+  for(const m of msgs){
+    const art=document.createElement('article');art.className='message '+m.role;
+    const meta=document.createElement('div');meta.className='message-meta';
+    const who=document.createElement('span');who.textContent=m.role==='user'?'You':'AI bud pro';meta.appendChild(who);
+    const tools=document.createElement('div');tools.className='message-tools';
+    const reuse=document.createElement('button');reuse.className='icon-button compact';reuse.title='Copy into composer';reuse.textContent='✏️';
+    reuse.onclick=()=>{const d=$('draft');d.value=d.value?d.value+'\n'+m.content:m.content;d.focus();};
+    tools.appendChild(reuse);meta.appendChild(tools);art.appendChild(meta);
+    const p=document.createElement('p');p.textContent=m.content||(m.role==='assistant'?'Thinking…':'');art.appendChild(p);
+    box.appendChild(art);
+  }
+  box.scrollTop=box.scrollHeight;
+}
+async function refreshHealth(){try{const h=await api('/api/health');S.health=h;$('brandSub').textContent=(h.model||'no model')+' • '+h.character;}catch{$('brandSub').textContent='offline';}}
+async function refreshSettings(){try{const j=await api('/api/settings');S.settings=j.settings||{};}catch{}}
+async function refreshModels(){
+  try{
+    const j=await api('/api/models');S.models=j;
+    const sel=$('setModel');sel.innerHTML='';
+    const groups=[['Local Ollama',(j.ollama&&j.ollama.length)?j.ollama:['(daemon offline)']],['OpenAI',j.cloud.openai||[]],['Gemini',j.cloud.gemini||[]],['Claude',j.cloud.claude||[]],['Grok',j.cloud.grok||[]],['Mistral',j.cloud.mistral||[]]];
+    for(const [g,ms] of groups){const og=document.createElement('optgroup');og.label=g;for(const m of ms){const o=document.createElement('option');o.value=m;o.textContent=m+(m===j.active?' ★':'');if(m===j.active)o.selected=true;og.appendChild(o);}sel.appendChild(og);}
+    if(j.active&&![...sel.options].some(o=>o.value===j.active)){const o=document.createElement('option');o.value=j.active;o.textContent=j.active+' ★';o.selected=true;sel.appendChild(o);}
+  }catch{}
+}
+async function refreshCharacters(){
+  try{
+    const j=await api('/api/characters');S.characters=j.characters||[];S.characterId=j.active||S.characterId;
+    const sel=$('setCharacter');sel.innerHTML='';
+    for(const c of S.characters){const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.active?' ★':'');if(c.active||c.id===S.characterId)o.selected=true;sel.appendChild(o);}
+    if(S.characterId)sel.value=S.characterId;
+  }catch{}
+}
+async function refreshSessions(){
+  try{
+    const q=S.characterId?('?characterId='+encodeURIComponent(S.characterId)):'';
+    const j=await api('/api/sessions'+q);S.sessions=j.sessions||[];
+    if(!S.sessions.some(s=>s.id===S.activeSessionId))S.activeSessionId=S.sessions[0]?.id||null;
+    renderSessions();
+  }catch{}
+}
+async function refreshMemories(){
+  try{
+    const q=S.characterId?('?characterId='+encodeURIComponent(S.characterId)+'&limit=100'):'?limit=100';
+    const j=await api('/api/memories'+q);
+    S.memories=(j.memories||[]).map(String);
+    renderMemories();
+  }catch{}
+}
+function renderMemories(){
+  $('memCount').textContent=String(S.memories.length);
+  const box=$('memoryList');box.innerHTML='';
+  if(!S.memories.length){box.innerHTML='<p style="color:var(--muted);font-size:0.86rem">No stored memories yet.</p>';return;}
+  for(const m of S.memories.slice(0,100)){
+    const d=document.createElement('div');d.className='memory-item';
+    const p=document.createElement('p');p.textContent=m;d.appendChild(p);box.appendChild(d);
+  }
+}
+async function selectSession(id,silent){
+  if(!id)return;
+  S.activeSessionId=id;renderSessions();
+  try{
+    const q=S.characterId?('?characterId='+encodeURIComponent(S.characterId)):'';
+    const j=await api('/api/sessions/'+encodeURIComponent(id)+q);
+    S.messages=(j.session.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({id:msgId(),role:m.role,content:String(m.content||'')}));
+    renderMessages();
+  }catch(e){setError(e.message);}
+}
+async function newChat(){
+  stopLive();setError('');
+  try{
+    const j=await api('/api/sessions',{method:'POST',body:JSON.stringify({characterId:S.characterId})});
+    await refreshSessions();await selectSession(j.session.id);
+  }catch(e){setError(e.message);}
+}
+async function deleteActive(){
+  if(!S.activeSessionId)return;
+  stopLive();
+  try{
+    await api('/api/sessions/'+encodeURIComponent(S.activeSessionId),{method:'DELETE'});
+    S.activeSessionId=null;S.messages=[];await refreshSessions();await selectSession(S.activeSessionId,true);renderMessages();
+  }catch(e){setError(e.message);}
+}
+async function sendMessage(textOverride){
+  const text=(textOverride??$('draft').value).trim();
+  if(!text||S.sending)return;
+  if(!S.activeSessionId)await newChat();
+  if(!S.activeSessionId){setError('No active session.');return;}
+  setError('');S.sending=true;$('sendBtn').disabled=true;
+  if(!textOverride)$('draft').value='';
+  const user={id:msgId(),role:'user',content:text};
+  const think={id:msgId(),role:'assistant',content:''};
+  S.messages.push(user,think);renderMessages();setAvatarState('thinking');
+  try{
+    const j=await api('/api/chat',{method:'POST',body:JSON.stringify({message:text,sessionId:S.activeSessionId,characterId:S.characterId})});
+    think.content=j.reply||'(empty reply)';
+    S.activeSessionId=j.sessionId||S.activeSessionId;
+    renderMessages();refreshSessions();
+    if(prefs.readAloud)speak(j.reply||'');
+    else setAvatarState(S.liveListening?'listening':'idle');
+  }catch(e){
+    S.messages=S.messages.filter(m=>m.id!==think.id);
+    setError(e.message);setAvatarState('idle');renderMessages();
+  }finally{S.sending=false;$('sendBtn').disabled=false;}
+}
+$('composer').addEventListener('submit',e=>{e.preventDefault();void sendMessage();});
+$('newChatBtn').onclick=()=>void newChat();
+$('sessionSelect').onchange=e=>void selectSession(e.target.value);
+$('deleteBtn').onclick=()=>{if(confirm('Delete this conversation?'))void deleteActive();};
+$('clearBtn').onclick=async()=>{
+  if(!S.activeSessionId)return;
+  stopLive();
+  try{
+    await api('/api/chat',{method:'POST',body:JSON.stringify({message:'@clear',sessionId:S.activeSessionId,characterId:S.characterId})});
+    S.messages=[];renderMessages();
+    const info={id:msgId(),role:'assistant',content:'🧹 Active conversation context cleared.'};
+    S.messages.push(info);renderMessages();refreshSessions();
+  }catch(e){setError(e.message);}
+};
+$('searchInput').addEventListener('input',e=>{S.search=e.target.value;$('searchClear').style.display=S.search?'':'none';renderSessions();renderMessages();});
+$('searchClear').onclick=()=>{S.search='';$('searchInput').value='';$('searchClear').style.display='none';renderSessions();renderMessages();};
+// ---- rename ----
+$('renameBtn').onclick=()=>{const s=S.sessions.find(x=>x.id===S.activeSessionId);$('renameInput').value=s?.title||'';$('renameModal').style.display='grid';$('renameInput').focus();};
+const closeRename=()=>{$('renameModal').style.display='none';};
+$('renameClose').onclick=closeRename;$('renameCancel').onclick=closeRename;
+$('renameSave').onclick=async()=>{
+  const t=$('renameInput').value.trim();
+  if(!t||!S.activeSessionId){closeRename();return;}
+  try{
+    await api('/api/sessions/'+encodeURIComponent(S.activeSessionId),{method:'PATCH',body:JSON.stringify({title:t})});
+    closeRename();await refreshSessions();renderSessions();
+  }catch(e){setError(e.message);}
+};
+// ---- speech ----
+function speak(text){
+  const clean=String(text||'').replace(/```[\s\S]*?```/g,' ').replace(/[*#_`~>|]/g,'').replace(/\s+/g,' ').trim().slice(0,600);
+  if(!clean||!prefs.readAloud||!window.speechSynthesis){setAvatarState(S.liveListening?'listening':'idle');return;}
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(clean);
+    u.onstart=()=>setAvatarState('speaking');
+    u.onend=()=>setAvatarState(shouldListen?'listening':'idle');
+    u.onerror=()=>setAvatarState(shouldListen?'listening':'idle');
+    window.speechSynthesis.speak(u);
+  }catch{setAvatarState('idle');}
+}
+function stopSpeech(){try{window.speechSynthesis?.cancel();}catch{}}
+function clearSilence(){if(silenceTimer!==null){clearTimeout(silenceTimer);silenceTimer=null;}}
+function startListening(){
+  if(!SpeechRec){setError('Speech recognition is not supported in this browser.');return;}
+  stopSpeech();
+  const rec=new SpeechRec();
+  rec.continuous=true;rec.interimResults=true;rec.lang=navigator.language||'en-US';
+  finalTranscript='';recognition=rec;
+  rec.onresult=(ev)=>{
+    let interim='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){const t=ev.results[i][0]?.transcript??'';if(ev.results[i].isFinal)finalTranscript+=t;else interim+=t;}
+    S.liveTranscript=(finalTranscript+interim).trim();renderLive();clearSilence();
+    if(S.liveTranscript)subtitleLive(S.liveTranscript);
+    if(S.liveTranscript){
+      silenceTimer=setTimeout(()=>{
+        const content=S.liveTranscript.trim();finalTranscript='';S.liveTranscript='';renderLive();
+        if(!content)return;
+        try{rec.onresult=null;rec.stop();}catch{}
+        if(prefs.confirmSpeech){S.reviewText=content;$('speechReviewText').textContent=content;$('speechReview').style.display='flex';shouldListen=false;S.liveListening=false;setAvatarState('idle');renderLive();}
+        else{void sendMessage(content);}
+      },1500);
+    }
+  };
+  rec.onerror=(ev)=>{if(ev.error==='not-allowed'){setError('Microphone permission was denied.');stopLive();}};
+  rec.onend=()=>{recognition=null;if(shouldListen)startListening();else{setAvatarState('idle');renderLive();}};
+  try{rec.start();setAvatarState('listening');}catch{recognition=null;setAvatarState('idle');}
+}
+function subtitleLive(t){$('liveCopy').textContent=t||'Listening';}
+function stopLive(){
+  shouldListen=false;S.liveListening=false;S.liveTranscript='';S.reviewText='';
+  clearSilence();try{recognition?.abort();}catch{}recognition=null;stopSpeech();
+  $('speechReview').style.display='none';setAvatarState('idle');renderLive();
+}
+$('callBtn').onclick=()=>{
+  if(S.liveListening||shouldListen){stopLive();return;}
+  if(!SpeechRec){setError('This browser does not support speech recognition and speech synthesis.');return;}
+  shouldListen=true;S.liveListening=true;S.liveTranscript='';$('speechReview').style.display='none';renderLive();startListening();
+};
+$('speechYes').onclick=()=>{const t=(S.reviewText||'').trim();S.reviewText='';$('speechReview').style.display='none';if(!t)return;shouldListen=true;S.liveListening=true;renderLive();void sendMessage(t);};
+$('speechEdit').onclick=()=>{const t=(S.reviewText||'').trim();if(t){const d=$('draft');d.value=d.value?d.value+' '+t:t;d.focus();}S.reviewText='';$('speechReview').style.display='none';shouldListen=false;S.liveListening=false;setAvatarState('idle');renderLive();};
+// ---- settings ----
+$('loadModelsBtn').onclick=()=>void refreshModels();
+$('addMemoryBtn').onclick=async()=>{
+  const t=$('newMemory').value.trim();if(!t)return;
+  try{await api('/api/memories',{method:'POST',body:JSON.stringify({text:t,characterId:S.characterId})});$('newMemory').value='';await refreshMemories();renderMessages();}catch(e){setError(e.message);}
+};
+$('exportBtn').onclick=()=>{
+  const s=S.sessions.find(x=>x.id===S.activeSessionId);
+  const blob=new Blob([JSON.stringify({app:'aifrienddash',exportedAt:new Date().toISOString(),session:s||null,messages:S.messages},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='aifrienddash-'+(s?.title||'session').replace(/[^\w\-]+/g,'-').slice(0,40)+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+$('resetBtn').onclick=async()=>{await refreshSettings();await refreshModels();await refreshCharacters();fillSettingsForm();};
+function fillSettingsForm(){
+  $('setServerUrl').value=S.settings.server_url||'';
+  $('setMemLimit').value=S.settings.mem_limit??10;
+  if(S.models.active)$('setModel').value=S.models.active;
+  if(S.characterId)$('setCharacter').value=S.characterId;
+}
+async function openSettings(){
+  await Promise.all([refreshSettings(),refreshModels(),refreshCharacters(),refreshMemories()]);
+  fillSettingsForm();applyPrefs();$('settingsModal').style.display='grid';
+}
+$('saveSettingsBtn').onclick=async()=>{
+  prefs.theme=$('setTheme').value;prefs.fontScale=Number($('setFontScale').value)||1;
+  prefs.readAloud=$('setReadAloud').checked;prefs.confirmSpeech=$('setConfirmSpeech').checked;
+  savePrefs();applyPrefs();
+  const patch={server_url:$('setServerUrl').value.trim(),mem_limit:Number($('setMemLimit').value)||10};
+  const model=$('setModel').value;const charId=$('setCharacter').value;
+  try{
+    if(model)await api('/api/model',{method:'POST',body:JSON.stringify({model})});
+    await api('/api/settings',{method:'POST',body:JSON.stringify({settings:patch})});
+    if(charId&&charId!==S.characterId){
+      await api('/api/characters/switch',{method:'POST',body:JSON.stringify({id:charId})});
+      S.characterId=charId;S.activeSessionId=null;S.messages=[];
+    }
+    $('settingsModal').style.display='none';setError('');
+    await refreshHealth();await refreshSessions();await selectSession(S.activeSessionId,true);
+  }catch(e){setError(e.message);}
+};
+// ---- boot ----
+applyPrefs();renderLive();
+(async()=>{
+  await refreshHealth();await refreshSettings();await refreshModels();await refreshCharacters();await refreshSessions();await refreshMemories();
+  fillSettingsForm();await selectSession(S.activeSessionId,true);
+})();
+</script>
+</body>
+</html>

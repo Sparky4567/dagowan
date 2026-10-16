@@ -21,13 +21,13 @@ import { fetchPageText, resolveWebSearchLimit, searchWeb } from "./websearch.js"
 const TOOLS = [
     {
         name: "web_search",
-        description: "Live web search. Mention-free query returns [{title, url, snippet}]. Keyless DuckDuckGo by default; Brave/Tavily when their API keys are set in the environment.",
+        description: "Live web search. Mention-free query returns [{title, url, snippet}]. Keyless DuckDuckGo by default; Brave/Tavily when their API keys are set; google-ai (@live-gemini) uses Gemini grounding when GEMINI_API_KEY is set, else keyless Google scrape with DuckDuckGo fallback.",
         inputSchema: {
             type: "object",
             properties: {
                 query: { type: "string", description: "Search query (required)." },
                 max_results: { type: "integer", description: "Max results 1-10 (default 5)." },
-                provider: { type: "string", description: "auto|duckduckgo|brave|tavily (default auto)." },
+                provider: { type: "string", description: "auto|duckduckgo|brave|tavily|google-ai (default auto)." },
             },
             required: ["query"],
         },
@@ -54,6 +54,8 @@ function settingsFromEnv() {
         websearch_timeout_ms: process.env.WEBSEARCH_TIMEOUT_MS || 12000,
         brave_api_key: process.env.BRAVE_API_KEY || "",
         tavily_api_key: process.env.TAVILY_API_KEY || "",
+        gemini_api_key: process.env.GEMINI_API_KEY || "",
+        gemini_search_model: process.env.GEMINI_SEARCH_MODEL || process.env.FACTCHECK_GEMINI_MODEL || "gemini-2.5-flash",
     };
 }
 

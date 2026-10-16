@@ -108,6 +108,10 @@ label{font-size:12px;color:var(--muted);font-weight:600}
     <div class="spacer"></div>
     <div class="badge" id="lockBadge" title="Security lock state">🔓 unlocked</div>
     <div class="badge" id="healthBadge">connecting…</div>
+    <button class="btn" id="voiceToggleBtn" title="Speak AI replies via the avatar popup">🔇 voice off</button>
+    <button class="btn" id="avatarBtn" title="Open lipsync avatar popup" style="display:none">👄 Avatar</button>
+    <button class="btn" id="aifriendBtn" title="Open AI Friend popup (AI Bud Pro avatar)" style="display:none">🤖 AI Friend</button>
+    <button class="btn" id="aifrienddashBtn" title="Open AI Friend dashboard (AI Bud Pro chat)" style="display:none">🤖💬 Bud Pro</button>
   </header>
   <div id="messages"></div>
   <div id="composer">
@@ -115,7 +119,7 @@ label{font-size:12px;color:var(--muted);font-weight:600}
       <input type="text" id="input" placeholder="Send a message… (try @help, @play, @lock …)" autocomplete="off" />
       <button class="btn primary" id="sendBtn">Send ➤</button>
     </div>
-    <div class="hint">Enter ↵ to send • <b>@help</b> lists commands • <b>@play …</b> YouTube • <b>@remember …</b> saves memory • <b>@lock / @unlock &lt;pin&gt;</b> security • live web search: add <b>@live-web</b> in a sentence</div>
+    <div class="hint">Enter ↵ to send • <b>@help</b> lists commands • <b>@play …</b> YouTube • <b>@remember …</b> saves memory • <b>@lock / @unlock &lt;pin&gt;</b> security • live web: <b>@live-web</b> • Google AI Mode: <b>@live-gemini</b></div>
   </div>
 </main>
 <div class="modal" id="settingsModal">
@@ -130,8 +134,69 @@ label{font-size:12px;color:var(--muted);font-weight:600}
   </div>
 </div>
 <script>
-let state={sessions:[],activeSessionId:null,characterId:null,model:null,sending:false};
+let state={sessions:[],activeSessionId:null,characterId:null,model:null,sending:false,voiceOn:false,avatarOn:false,avatarWin:null,aifriendOn:false,aifriendWin:null,aifrienddashOn:false};
 const $=id=>document.getElementById(id);
+let avatarChannel=null;
+try{avatarChannel=new BroadcastChannel('dagowan-avatar');}catch{}
+let aifriendChannel=null;
+try{aifriendChannel=new BroadcastChannel('dagowan-aifriend');}catch{}
+// Avatar / AI Friend popup wiring: the dashboard stays silent — the /avatar
+// or /aifriend window is the only audio player so lipsync stays
+// sample-accurate. Text is fanned out via BroadcastChannel (+ localStorage
+// fallback for blocked BC). AI Friend (AI Bud Pro avatar port) listens on
+// both channels, so a single fan-out reaches either popup.
+function cleanForAvatar(t){return String(t||'').replace(/```[\s\S]*?```/g,' ').replace(/https?:\/\/\S+/g,'').replace(/[*#_`~>|]/g,'').replace(/\s+/g,' ').trim().slice(0,600);}
+function speakViaAvatar(text){
+  if(!state.voiceOn||!(state.avatarOn||state.aifriendOn))return;
+  const clean=cleanForAvatar(text);
+  if(!clean)return;
+  try{if(avatarChannel)avatarChannel.postMessage({type:'speak',text:clean});}catch{}
+  try{if(aifriendChannel)aifriendChannel.postMessage({type:'speak',text:clean});}catch{}
+  try{localStorage.setItem('dagowan-avatar-speak',JSON.stringify({text:clean,at:Date.now()}));}catch{}
+  try{localStorage.setItem('dagowan-aifriend-speak',JSON.stringify({text:clean,at:Date.now()}));}catch{}
+  if(state.avatarWin&&state.avatarWin.closed)state.avatarWin=null;
+  if(state.aifriendWin&&state.aifriendWin.closed)state.aifriendWin=null;
+}
+function openAvatarPopup(){
+  try{
+    state.avatarWin=window.open('/avatar','dagowan-avatar','width=440,height=700');
+    if(!state.avatarWin)alert('Popup blocked — allow popups for this dashboard, then try again.');
+  }catch(e){alert('Could not open avatar: '+e.message);}
+}
+function openAiFriendPopup(){
+  try{
+    state.aifriendWin=window.open('/aifriend','dagowan-aifriend','width=460,height=760');
+    if(!state.aifriendWin)alert('Popup blocked — allow popups for this dashboard, then try again.');
+  }catch(e){alert('Could not open AI Friend: '+e.message);}
+}
+async function refreshAvatarStatus(){
+  try{
+    const j=await api('/api/avatar-status');
+    state.avatarOn=!!j.enabled;
+  }catch{state.avatarOn=false;}
+  try{
+    const j=await api('/api/aifriend-status');
+    state.aifriendOn=!!j.enabled;
+  }catch{state.aifriendOn=false;}
+  try{
+    const j=await api('/api/aifrienddash-status');
+    state.aifrienddashOn=!!j.enabled;
+  }catch{state.aifrienddashOn=false;}
+  const b=$('avatarBtn');
+  if(b)b.style.display=state.avatarOn?'':'none';
+  const f=$('aifriendBtn');
+  if(f)f.style.display=state.aifriendOn?'':'none';
+  const fd=$('aifrienddashBtn');
+  if(fd)fd.style.display=state.aifrienddashOn?'':'none';
+  updateVoiceBtn();
+}
+function updateVoiceBtn(){
+  const b=$('voiceToggleBtn');
+  if(!b)return;
+  if(!(state.avatarOn||state.aifriendOn)){b.textContent='👄 avatar off';b.title='Start server with --avatar or --aifriend to enable voice + lipsync';return;}
+  b.textContent=state.voiceOn?'🔊 voice on':'🔇 voice off';
+  b.title=state.voiceOn?'AI replies are spoken in the avatar / AI Friend popup':'Click to speak AI replies in the avatar / AI Friend popup';
+}
 function bubble(role,text,meta){
   const d=document.createElement('div');d.className='bubble '+role;
   if(meta){const m=document.createElement('div');m.className='meta';m.textContent=meta;d.appendChild(m);}
@@ -225,6 +290,7 @@ async function send(){
     const j=await api('/api/chat',{method:'POST',body:JSON.stringify({message:t,sessionId:state.activeSessionId,characterId:state.characterId})});
     thinking.remove();
     bubble('assistant',j.reply,'assistant'+(j.command?' • command':''));
+    speakViaAvatar(j.reply);
     state.activeSessionId=j.sessionId;
     await refreshSessions();refreshHealth();
   }catch(e){thinking.remove();bubble('assistant','⚠️ '+(e.message||e),'error');}
@@ -248,7 +314,18 @@ $('saveSettingsBtn').onclick=async()=>{
   }catch(e){alert(e.message);}
 };
 try{$('voiceLink').href='http://'+location.hostname+':8767';}catch{}
-(async()=>{bubble('assistant','👋 Welcome to the Dagowan Dashboard — an OpenWebUI-style chat for this project.','assistant');await refreshHealth();await refreshModels();await refreshCharacters();await refreshSessions();})();
+try{
+  const vb=$('voiceToggleBtn');
+  if(vb)vb.onclick=()=>{state.voiceOn=!state.voiceOn;try{localStorage.setItem('dagowan-voice',state.voiceOn?'1':'0');}catch{}updateVoiceBtn();if(state.voiceOn&&(state.avatarOn||state.aifriendOn)){if(state.aifriendOn)openAiFriendPopup();else openAvatarPopup();}};
+  const ab=$('avatarBtn');
+  if(ab)ab.onclick=openAvatarPopup;
+  const fb=$('aifriendBtn');
+  if(fb)fb.onclick=openAiFriendPopup;
+  const fdb=$('aifrienddashBtn');
+  if(fdb)fdb.onclick=()=>{try{window.open('/aifrienddash','dagowan-aifrienddash');}catch(e){alert('Could not open AI Friend dashboard: '+e.message);}};
+  try{state.voiceOn=localStorage.getItem('dagowan-voice')==='1';}catch{}
+}catch{}
+(async()=>{bubble('assistant','👋 Welcome to the Dagowan Dashboard — an OpenWebUI-style chat for this project.','assistant');await refreshAvatarStatus();await refreshHealth();await refreshModels();await refreshCharacters();await refreshSessions();})();
 setInterval(refreshHealth,30000);
 </script>
 </body>

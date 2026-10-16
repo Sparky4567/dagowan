@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dagowan Avatar — Lipsync Popup</title>
+<style>
+:root{--bg:#0b0e14;--panel:#131722;--border:rgba(255,255,255,.1);--accent:#ff8c1a;--text:#eef2ff;--muted:#94a3b8}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,sans-serif}
+body{background:radial-gradient(circle at 50% 20%,#2a1a10 0%,var(--bg) 65%);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:18px;gap:14px}
+.card{width:100%;max-width:420px;background:var(--panel);border:1px solid rgba(255,140,26,.25);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;align-items:center}
+h2{font-size:16px;color:var(--accent)}
+.status{font-size:12px;color:var(--muted);text-align:center;min-height:32px}
+#stage{width:280px;height:280px}
+.btn{padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:#171c2b;color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+.btn.primary{background:linear-gradient(135deg,var(--accent),#c2410c);color:#1a0d00;border:none}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+select,input[type=text]{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:#0d111c;color:var(--text);font-size:13px;outline:none}
+#speakText{width:100%}
+#caption{font-size:13px;color:var(--muted);max-width:100%;max-height:96px;overflow-y:auto;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>🎃 Dagowan Avatar</h2>
+  <svg id="stage" viewBox="0 0 280 280" aria-label="AI avatar">
+    <defs>
+      <radialGradient id="glow" cx="50%" cy="40%" r="65%">
+        <stop offset="0%" stop-color="#3a1f0d"/><stop offset="100%" stop-color="#0b0e14"/>
+      </radialGradient>
+      <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#ffd166"/><stop offset="55%" stop-color="#ff8c1a"/><stop offset="100%" stop-color="#c2410c"/>
+      </linearGradient>
+    </defs>
+    <circle cx="140" cy="140" r="128" fill="url(#glow)"/>
+    <g id="headBob">
+      <!-- stem + leaf -->
+      <rect x="131" y="12" width="18" height="38" rx="6" fill="#6b4423" transform="rotate(6 140 31)"/>
+      <ellipse cx="164" cy="28" rx="14" ry="7" fill="#4d7c0f" transform="rotate(-25 164 28)"/>
+      <path d="M124 22 q-12 -8 -20 2" fill="none" stroke="#4d7c0f" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="140" cy="128" r="86" fill="url(#face)" opacity="0.92"/>
+      <!-- pumpkin ribs -->
+      <ellipse cx="140" cy="128" rx="78" ry="85" fill="none" stroke="#b34a00" stroke-width="3" opacity="0.3"/>
+      <ellipse cx="140" cy="128" rx="55" ry="85" fill="none" stroke="#b34a00" stroke-width="3" opacity="0.3"/>
+      <ellipse cx="140" cy="128" rx="30" ry="85" fill="none" stroke="#b34a00" stroke-width="3" opacity="0.3"/>
+      <ellipse cx="112" cy="96" rx="30" ry="18" fill="#ffffff" opacity="0.1" transform="rotate(-20 112 96)"/>
+      <circle cx="140" cy="128" r="86" fill="none" stroke="rgba(255,140,26,.5)" stroke-width="2"/>
+      <g id="eyes">
+        <ellipse id="eyeL" cx="108" cy="112" rx="13" ry="15" fill="#2a1200" stroke="#ffb347" stroke-width="1.5" stroke-opacity="0.8"/>
+        <ellipse id="eyeR" cx="172" cy="112" rx="13" ry="15" fill="#2a1200" stroke="#ffb347" stroke-width="1.5" stroke-opacity="0.8"/>
+        <circle id="pupilL" cx="108" cy="114" r="5" fill="#ffd166"/>
+        <circle id="pupilR" cx="172" cy="114" r="5" fill="#ffd166"/>
+      </g>
+      <!-- mouth: ry is driven by live audio level -->
+      <ellipse id="mouth" cx="140" cy="176" rx="30" ry="6" fill="#1a0d00" stroke="#ffb347" stroke-width="2.5"/>
+    </g>
+  </svg>
+  <div class="status" id="status">Starting… allow audio on first click, then keep this window open.</div>
+  <div class="row">
+    <select id="engineSel" title="TTS engine">
+      <option value="server">Server TTS (local lipsync)</option>
+      <option value="browser">Browser voice (fallback)</option>
+    </select>
+    <button class="btn primary" id="unlockBtn">🔊 Enable audio</button>
+  </div>
+  <div class="row" style="width:100%">
+    <input type="text" id="speakText" placeholder="Type to test the avatar…" />
+    <button class="btn" id="speakBtn">Speak</button>
+    <button class="btn" id="stopBtn">⏹ Stop</button>
+  </div>
+  <div id="caption"></div>
+  <div class="status">Speaks only dashboard AI replies. Mouth opens with real audio volume (server) or word timing (browser).</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const statusEl=$('status'),captionEl=$('caption');
+const mouth=$('mouth'),eyeL=$('eyeL'),eyeR=$('eyeR'),headBob=$('headBob');
+let audioCtx=null,analyser=null,audioEl=null,rafId=null,mouthOpen=0,mouthTarget=0,speaking=false;
+let queue=[],browserMouthTimer=null;
+function setStatus(t){statusEl.textContent=t;}
+function stripMd(t){return String(t||'').replace(/```[\s\S]*?```/g,' ').replace(/https?:\/\/\S+/g,'').replace(/[*#_`~>|]/g,'').replace(/\s+/g,' ').trim();}
+function ensureAudio(){
+  if(!audioCtx){
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=audioCtx.createAnalyser();analyser.fftSize=512;analyser.connect(audioCtx.destination);
+  }
+  if(audioCtx.state==='suspended')audioCtx.resume();
+}
+function tick(){
+  if(analyser&&(speaking||mouthOpen>0.5)){
+    const d=new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(d);
+    let sum=0;for(let i=0;i<d.length;i++){const v=(d[i]-128)/128;sum+=v*v;}
+    const rms=Math.sqrt(sum/d.length);
+    mouthTarget=Math.min(1,(rms-0.015)*9);
+  }else if(!speaking){mouthTarget=0;}
+  mouthOpen+=(mouthTarget-mouthOpen)*0.35;
+  const ry=4+mouthOpen*22;
+  mouth.setAttribute('ry',ry.toFixed(1));
+  headBob.setAttribute('transform',`translate(0 ${(Math.sin(Date.now()/900)*2-speaking?0:mouthOpen*2).toFixed(1)})`);
+  rafId=requestAnimationFrame(tick);
+}
+function blink(){
+  eyeL.setAttribute('ry','1.5');eyeR.setAttribute('ry','1.5');
+  setTimeout(()=>{eyeL.setAttribute('ry','15');eyeR.setAttribute('ry','15');},130);
+  setTimeout(blink,2600+Math.random()*2600);
+}
+async function speakServer(text){
+  ensureAudio();
+  const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,engine:'local'})});
+  if(r.status===409){throw new Error('fallback-browser');}
+  if(!r.ok){let m='TTS failed';try{const j=await r.json();m=j.error||m;}catch{}throw new Error(m);}
+  const blob=await r.blob();
+  const url=URL.createObjectURL(blob);
+  stopAudio(false);
+  audioEl=new Audio(url);
+  const src=audioCtx.createMediaElementSource(audioEl);
+  src.connect(analyser);
+  speaking=true;setStatus('🔊 Speaking (server TTS)…');
+  audioEl.onended=()=>{speaking=false;mouthTarget=0;setStatus('Listening for dashboard replies…');try{URL.revokeObjectURL(url);}catch{}next();};
+  audioEl.onerror=()=>{speaking=false;setStatus('⚠️ Audio playback failed.');next();};
+  await audioEl.play();
+}
+function speakBrowser(text){
+  ensureAudio();
+  if(!window.speechSynthesis)throw new Error('No browser speech available.');
+  stopAudio(false);
+  speaking=true;setStatus('🔊 Speaking (browser voice)…');
+  const u=new SpeechSynthesisUtterance(text);
+  u.onboundary=()=>{mouthTarget=1;clearTimeout(browserMouthTimer);browserMouthTimer=setTimeout(()=>mouthTarget=0.15,180);};
+  const wobble=setInterval(()=>{if(speaking)mouthTarget=0.4+Math.random()*0.6;},160);
+  u.onend=()=>{clearInterval(wobble);speaking=false;mouthTarget=0;setStatus('Listening for dashboard replies…');next();};
+  u.onerror=()=>{clearInterval(wobble);speaking=false;setStatus('⚠️ Browser speech failed.');next();};
+  window.speechSynthesis.cancel();window.speechSynthesis.speak(u);
+}
+async function speak(text){
+  const clean=stripMd(text).slice(0,600);
+  if(!clean)return;
+  captionEl.textContent=clean;
+  const engine=$('engineSel').value;
+  if(engine==='browser'){
+    try{speakBrowser(clean);}
+    catch(e){speaking=false;setStatus('⚠️ '+e.message+' — browser speech unavailable.');next();}
+    return;
+  }
+  try{await speakServer(clean);}
+  catch(e){
+    // Server TTS failed — a busy/restarting dashboard surfaces as a
+    // network error or empty response (local MMS-TTS synthesis is slow),
+    // and a 409 means the server is in browser-TTS mode. Fall back to the
+    // browser voice so dashboard replies are still heard instead of lost.
+    const explicitFallback=e&&e.message==='fallback-browser';
+    const reason=explicitFallback?null:(e.message||'network error');
+    try{
+      speakBrowser(clean);
+      if(reason)setStatus('⚠️ Server TTS failed ('+reason+') — using browser voice…');
+    }catch(e2){speaking=false;setStatus('⚠️ '+(reason||e2.message)+' — switch engine or check server TTS.');next();}
+  }
+}
+function next(){const t=queue.shift();if(t!==undefined)speak(t);}
+function enqueue(text){queue.push(String(text));if(!speaking&&queue.length===1)next();}
+function stopAudio(flush=true){
+  if(audioEl){try{audioEl.pause();}catch{}audioEl=null;}
+  if(window.speechSynthesis){try{window.speechSynthesis.cancel();}catch{}}
+  speaking=false;mouthTarget=0;
+  if(flush)queue=[];
+  if(!flush)return;
+  setStatus('Listening for dashboard replies…');
+}
+$('speakBtn').onclick=()=>{const t=$('speakText').value.trim();if(t){$('speakText').value='';enqueue(t);}};
+$('speakText').addEventListener('keydown',e=>{if(e.key==='Enter')$('speakBtn').click();});
+$('stopBtn').onclick=()=>stopAudio(true);
+$('unlockBtn').onclick=()=>{ensureAudio();setStatus('Audio enabled. Listening for dashboard replies…');$('unlockBtn').disabled=true;};
+$('engineSel').onchange=()=>{stopAudio(true);};
+// Cross-window wiring: dashboard broadcasts AI replies here.
+let bc=null;
+try{bc=new BroadcastChannel('dagowan-avatar');bc.onmessage=e=>{const d=e.data||{};if(d.type==='speak'&&d.text)enqueue(d.text);if(d.type==='stop')stopAudio(true);};}
+catch{}
+window.addEventListener('storage',e=>{if(e.key==='dagowan-avatar-speak'&&e.newValue){try{const d=JSON.parse(e.newValue);if(d.text)enqueue(d.text);}catch{}}});
+window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='dagowan-avatar-speak'&&d.text)enqueue(d.text);});
+(function init(){
+  fetch('/api/avatar-status').then(r=>r.json()).then(j=>{
+    // Default to server synthesis (real waveform lipsync) even when the
+    // server is configured for browser TTS — the popup sends engine:'local'
+    // explicitly, so no 409. Browser voice stays available via the selector.
+    setStatus('Listening for dashboard replies… keep this window open.');
+  }).catch(()=>setStatus('Listening for dashboard replies… keep this window open.'));
+  const q=new URLSearchParams(location.search);
+  const t=q.get('speak')||q.get('text');
+  if(t)enqueue(t);
+  if(q.get('engine')==='browser')$('engineSel').value='browser';
+  rafId=requestAnimationFrame(tick);blink();
+})();
+</script>
+</body>
+</html>

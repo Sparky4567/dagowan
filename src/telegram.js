@@ -558,8 +558,8 @@ export class TelegramBotRunner {
             return;
         }
 
-        // Live web search - @live-web / @web-search / @websearch / @web-fetch / @web-status
-        // (inline "@live-web within a sentence" is injected into LLM context below).
+        // Live web search - @live-web / @live-gemini / @web-search / @websearch / @web-fetch / @web-status
+        // (inline "@live-web / @live-gemini within a sentence" is injected into LLM context below).
         {
             const { parseWebSearchCommand, parseWebFetchCommand, parseWebStatusCommand, searchWeb, formatWebResults, fetchPageText, formatPageText, formatWebStatus } = await import("./websearch.js");
             if (parseWebStatusCommand(msgText)) {
@@ -569,7 +569,7 @@ export class TelegramBotRunner {
             const webSearchCmd = parseWebSearchCommand(msgText, this.settings);
             if (webSearchCmd) {
                 if (!webSearchCmd.query) {
-                    await this.sendMessage(chatId, '⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]\nInline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")');
+                    await this.sendMessage(chatId, '⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N]\nInline forms: @live-web ("latest BTC price @live-web") or @live-gemini ("explain black holes @live-gemini")');
                     return;
                 }
                 await this.sendMessage(chatId, `🌐 Searching the live web for "${webSearchCmd.query}"...`);

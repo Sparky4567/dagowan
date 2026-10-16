@@ -148,7 +148,7 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @voice-reply [on|off] (or @voicereply) — Toggle automatic local voice note response generation (saved to app_settings.json)
 • @web [on|off] (or @voice-socket, @voice-server, @dagowan) — Launch/toggle real-time duplex voice web interface (http://127.0.0.1:8767)
 • @dashboard [on|off] [port] (or @dash) — Launch/toggle OpenWebUI-style chat dashboard (http://127.0.0.1:8768; custom port via @dashboard 8899, DASHBOARD_PORT, or --dashboard-port N)
-• @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N] (or @websearch) — Live web search injected into the next LLM answer (works for ALL cloud models: OpenAI/Gemini/Claude/Grok/Mistral + local Ollama). Inline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")
+• @web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N] (or @websearch) — Live web search injected into the next LLM answer (works for ALL cloud models: OpenAI/Gemini/Claude/Grok/Mistral + local Ollama). Inline forms: @live-web ("latest BTC price @live-web") or @live-gemini ("explain black holes @live-gemini")
 • @web-fetch <url> (or @webfetch) — Fetch a page as plain text (read a search result in full)
 • @web-status — Show web search engine configuration
 
@@ -2073,8 +2073,8 @@ export async function handleAtCommand({
         return { handled: true };
     }
 
-    // Live web search - @live-web <query> | @web-search <query> | @websearch <query> | @search-web <query>
-    // (explicit forms; the inline "@live-web within a sentence" trigger is
+    // Live web search - @live-web <query> | @live-gemini <query> | @web-search <query> | @websearch <query> | @search-web <query>
+    // (explicit forms; the inline "@live-web / @live-gemini within a sentence" trigger is
     // handled in the chat pipelines via runWebSearchForPrompt in src/websearch.js).
     // Must run BEFORE the @web voice-bridge block below (prefix overlap).
     {
@@ -2087,9 +2087,9 @@ export async function handleAtCommand({
         const webSearchCmd = parseWebSearchCommand(rawInput, context ? context.settings : {});
         if (webSearchCmd) {
             if (!webSearchCmd.query) {
-                console.log("⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]");
+                console.log("⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N]");
                 console.log("Example: @web-search latest BTC price");
-                console.log('Inline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")');
+                console.log('Inline forms: @live-web ("latest BTC price @live-web") or @live-gemini ("explain black holes @live-gemini")');
                 return { handled: true };
             }
             try {

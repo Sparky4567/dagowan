@@ -66,6 +66,7 @@ export function dashboardHelpText(settings = {}) {
         `• @astro-post <topic> [--no-push] / @astro-status / @astro-list / @astro-build — Astro site`,
         `• @fact-check <claim> (or @factcheck, @verify) — verify a claim via papers`,
         `• @web-search <query> / @web-fetch <url> / @web-status — live web tools`,
+        `• @live-gemini <query> — Google AI Mode search (Gemini grounding, same inline rules as @live-web)`,
         `• @browser-search <query> / @browser-open <url> / @browser-read / @browser-shot / @browser-status / @browser-close`,
         `• @cast <url> / @cast-scan / @cast-status / @cast-stop — TV cast`,
         `• @make <desc> / @create-file <path> [content] — local coding agent`,
@@ -76,6 +77,7 @@ export function dashboardHelpText(settings = {}) {
         `• @otp-set / @otp-login <code> / @otp-lock / @otp-status — OTP 2FA (needed before @unlock when enrolled)`,
         `• Security unlocks last ${unlockMinutes} minute(s) per surface (security_unlock_minutes).`,
         `• Tip: add @live-web anywhere in a sentence for a live web-grounded answer.`,
+        `• Tip: add @live-gemini anywhere for a Google AI Mode grounded answer.`,
     ].join("\n");
 }
 
@@ -126,9 +128,110 @@ function nextIsPort(v) {
 }
 
 /**
+ * Central gate for the avatar popup.
+ * Enabled with `--avatar` / `-avatar`, `--no-avatar` always wins,
+ * env AVATAR_ENABLED=1, or settings.avatar_enabled.
+ * The avatar only works with the web dashboard (served as /avatar
+ * by the DashboardServer) and only speaks AI-generated audio.
+ */
+export function shouldStartAvatar(settings = null, argv = process.argv, env = process.env) {
+    const args = Array.isArray(argv) ? argv : [];
+    if (hasFlag(args, "--no-avatar", "-no-avatar")) {
+        return { enabled: false, reason: "disabled-flag" };
+    }
+    const explicitOn = hasFlag(args, "--avatar", "-avatar");
+    const envFlag = parseEnabledFlag(env.AVATAR_ENABLED ?? env.AVATAR);
+    if (envFlag === false && !explicitOn) return { enabled: false, reason: "disabled-env" };
+    if (explicitOn || envFlag === true) {
+        return { enabled: true, reason: explicitOn ? "flag" : "env" };
+    }
+    if (settings && settings.avatar_enabled) {
+        return { enabled: true, reason: "settings" };
+    }
+    return { enabled: false, reason: "disabled-default" };
+}
+
+export function isAvatarEnabled(settings = null, argv = process.argv, env = process.env) {
+    try {
+        return shouldStartAvatar(settings, argv, env).enabled;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Central gate for the AI Friend popup (AI Bud Pro avatar port).
+ * Enabled with `--aifriend` / `-aifriend`, `--no-aifriend` always wins,
+ * env AIFRIEND_ENABLED=1, or settings.aifriend_enabled.
+ * Like --avatar, it implies the dashboard (served as /aifriend by the
+ * DashboardServer) and only speaks AI-generated audio. The 3D character is
+ * a vanilla-JS port of ai_bud_pro/src/LiveCharacter3D.tsx (see aifriend.html).
+ */
+export function shouldStartAiFriend(settings = null, argv = process.argv, env = process.env) {
+    const args = Array.isArray(argv) ? argv : [];
+    if (hasFlag(args, "--no-aifriend", "-no-aifriend")) {
+        return { enabled: false, reason: "disabled-flag" };
+    }
+    const explicitOn = hasFlag(args, "--aifriend", "-aifriend");
+    const envFlag = parseEnabledFlag(env.AIFRIEND_ENABLED ?? env.AIFRIEND);
+    if (envFlag === false && !explicitOn) return { enabled: false, reason: "disabled-env" };
+    if (explicitOn || envFlag === true) {
+        return { enabled: true, reason: explicitOn ? "flag" : "env" };
+    }
+    if (settings && settings.aifriend_enabled) {
+        return { enabled: true, reason: "settings" };
+    }
+    return { enabled: false, reason: "disabled-default" };
+}
+
+export function isAiFriendEnabled(settings = null, argv = process.argv, env = process.env) {
+    try {
+        return shouldStartAiFriend(settings, argv, env).enabled;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Central gate for the AI Friend dashboard (AI Bud Pro main-chat port).
+ * Enabled with `--aifrienddash` / `-aifrienddash`, `--no-aifrienddash`
+ * always wins, env AIFRIENDDASH_ENABLED=1, or settings.aifrienddash_enabled.
+ * Like --avatar/--aifriend, it implies the dashboard (served as /aifrienddash
+ * by the DashboardServer). The chat UI is a vanilla-JS port of
+ * ai_bud_pro/src/main.tsx (see aifrienddash.html) wired to the dagowan
+ * dashboard REST API instead of Ollama directly.
+ */
+export function shouldStartAiFriendDash(settings = null, argv = process.argv, env = process.env) {
+    const args = Array.isArray(argv) ? argv : [];
+    if (hasFlag(args, "--no-aifrienddash", "-no-aifrienddash")) {
+        return { enabled: false, reason: "disabled-flag" };
+    }
+    const explicitOn = hasFlag(args, "--aifrienddash", "-aifrienddash");
+    const envFlag = parseEnabledFlag(env.AIFRIENDDASH_ENABLED ?? env.AIFRIENDDASH);
+    if (envFlag === false && !explicitOn) return { enabled: false, reason: "disabled-env" };
+    if (explicitOn || envFlag === true) {
+        return { enabled: true, reason: explicitOn ? "flag" : "env" };
+    }
+    if (settings && settings.aifrienddash_enabled) {
+        return { enabled: true, reason: "settings" };
+    }
+    return { enabled: false, reason: "disabled-default" };
+}
+
+export function isAiFriendDashEnabled(settings = null, argv = process.argv, env = process.env) {
+    try {
+        return shouldStartAiFriendDash(settings, argv, env).enabled;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Central gate for the dashboard server.
  * Starts with `-dashboard` / `--dashboard` (single dash accepted per request),
  * `--dashboard-port N`, env DASHBOARD_ENABLED=1, or settings.dashboard_enabled.
+ * `--avatar` / `--aifriend` / `--aifrienddash` imply the dashboard (the popups
+ * are served by it).
  * `--no-dashboard` always wins.
  */
 export function shouldStartDashboard(settings = null, argv = process.argv, env = process.env) {
@@ -136,13 +239,24 @@ export function shouldStartDashboard(settings = null, argv = process.argv, env =
     if (hasFlag(args, "--no-dashboard", "-no-dashboard")) {
         return { start: false, reason: "disabled-flag" };
     }
+    const avatarOn = isAvatarEnabled(settings, argv, env);
+    const aiFriendOn = isAiFriendEnabled(settings, argv, env);
+    const aiFriendDashOn = isAiFriendDashEnabled(settings, argv, env);
+    const impliedOn = avatarOn || aiFriendOn || aiFriendDashOn;
     const explicitOn =
         hasFlag(args, "--dashboard", "-dashboard") ||
-        args.some((a) => String(a).startsWith("--dashboard-port") || String(a).startsWith("-dashboard-port"));
+        args.some((a) => String(a).startsWith("--dashboard-port") || String(a).startsWith("-dashboard-port")) ||
+        impliedOn;
     const envFlag = parseEnabledFlag(env.DASHBOARD_ENABLED ?? env.DASHBOARD);
     if (envFlag === false && !explicitOn) return { start: false, reason: "disabled-env" };
     if (explicitOn || envFlag === true) {
-        return { start: true, reason: explicitOn ? "flag" : "env", port: resolveDashboardPort(settings, argv, env) };
+        let impliedReason = "avatar-flag";
+        if (aiFriendDashOn && !aiFriendOn && !avatarOn) impliedReason = "aifrienddash-flag";
+        else if (aiFriendOn && !avatarOn) impliedReason = "aifriend-flag";
+        const reason = !hasFlag(args, "--dashboard", "-dashboard") && impliedOn
+            ? impliedReason
+            : explicitOn ? "flag" : "env";
+        return { start: true, reason, port: resolveDashboardPort(settings, argv, env) };
     }
     if (settings && settings.dashboard_enabled) {
         return { start: true, reason: "settings", port: resolveDashboardPort(settings, argv, env) };
@@ -175,6 +289,10 @@ export class DashboardServer {
         this.port = null;
         this.services = {
             unifiedChat: services.unifiedChat || defaultUnifiedChat,
+            // Optional override for /api/tts (tests stub this to avoid
+            // loading the heavy local ONNX stack; production falls back
+            // to a lazy audio.js import in handleRequest).
+            synthesizeSpeech: services.synthesizeSpeech || null,
         };
     }
 
@@ -184,6 +302,18 @@ export class DashboardServer {
         } catch {
             return { id: this.settings.active_character || "main", name: "Main" };
         }
+    }
+
+    isAvatarEnabled() {
+        return isAvatarEnabled(this.settings, process.argv, process.env);
+    }
+
+    isAiFriendEnabled() {
+        return isAiFriendEnabled(this.settings, process.argv, process.env);
+    }
+
+    isAiFriendDashEnabled() {
+        return isAiFriendDashEnabled(this.settings, process.argv, process.env);
     }
 
     /**
@@ -680,7 +810,7 @@ export class DashboardServer {
             const webSearchCmd = web.parseWebSearchCommand(text, this.settings);
             if (webSearchCmd) {
                 if (!webSearchCmd.query) {
-                    return '⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]\nInline form: mention @live-web anywhere in a sentence ("latest BTC price @live-web")';
+                    return '⚠️ Usage: @web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N]\nInline forms: @live-web ("latest BTC price @live-web") or @live-gemini ("explain black holes @live-gemini")';
                 }
                 const res = await web.searchWeb(webSearchCmd.query, this.settings, { provider: webSearchCmd.provider, maxResults: webSearchCmd.maxResults });
                 return web.formatWebResults(res);
@@ -1015,8 +1145,109 @@ export class DashboardServer {
                 service: "dagowan-dashboard",
                 model: this.settings.model,
                 character: this.getActiveCharacter().id,
+                avatar: this.isAvatarEnabled(),
+                aifriend: this.isAiFriendEnabled(),
+                aifrienddash: this.isAiFriendDashEnabled(),
                 time: new Date().toISOString(),
             });
+        }
+
+        if (req.method === "GET" && pathname === "/avatar") {
+            if (!this.isAvatarEnabled()) {
+                return new Response("Avatar is disabled. Restart with --avatar to enable it.", { status: 404 });
+            }
+            const htmlPath = path.join(process.cwd(), "avatar.html");
+            if (fs.existsSync(htmlPath)) {
+                return new Response(fs.readFileSync(htmlPath, "utf8"), {
+                    headers: { "Content-Type": "text/html; charset=utf-8" },
+                });
+            }
+            return new Response("Avatar HTML file missing.", { status: 444 });
+        }
+
+        if (req.method === "GET" && pathname === "/api/avatar-status") {
+            return jsonResponse({
+                enabled: this.isAvatarEnabled(),
+                ttsEngine: this.settings.tts_engine || "local",
+                ttsVoice: this.settings.openai_tts_voice || "alloy",
+            });
+        }
+
+        if (req.method === "GET" && pathname === "/aifriend") {
+            if (!this.isAiFriendEnabled()) {
+                return new Response("AI Friend is disabled. Restart with --aifriend to enable it.", { status: 404 });
+            }
+            const htmlPath = path.join(process.cwd(), "aifriend.html");
+            if (fs.existsSync(htmlPath)) {
+                return new Response(fs.readFileSync(htmlPath, "utf8"), {
+                    headers: { "Content-Type": "text/html; charset=utf-8" },
+                });
+            }
+            return new Response("AI Friend HTML file missing.", { status: 444 });
+        }
+
+        if (req.method === "GET" && pathname === "/api/aifriend-status") {
+            return jsonResponse({
+                enabled: this.isAiFriendEnabled(),
+                ttsEngine: this.settings.tts_engine || "local",
+                ttsVoice: this.settings.openai_tts_voice || "alloy",
+            });
+        }
+
+        if (req.method === "GET" && pathname === "/aifrienddash") {
+            if (!this.isAiFriendDashEnabled()) {
+                return new Response("AI Friend dashboard is disabled. Restart with --aifrienddash to enable it.", { status: 404 });
+            }
+            const htmlPath = path.join(process.cwd(), "aifrienddash.html");
+            if (fs.existsSync(htmlPath)) {
+                return new Response(fs.readFileSync(htmlPath, "utf8"), {
+                    headers: { "Content-Type": "text/html; charset=utf-8" },
+                });
+            }
+            return new Response("AI Friend dashboard HTML file missing.", { status: 444 });
+        }
+
+        if (req.method === "GET" && pathname === "/api/aifrienddash-status") {
+            return jsonResponse({
+                enabled: this.isAiFriendDashEnabled(),
+            });
+        }
+
+        if (req.method === "POST" && pathname === "/api/tts") {
+            // Server-side TTS for the avatar popup. The avatar window is the
+            // only audio player (dashboard itself stays silent) so lipsync is
+            // sample-accurate. Lazy import keeps plain-chat tests free of ONNX.
+            const body = await readJsonBody(req);
+            const rawText = String(body.text || "").trim();
+            if (!rawText) return jsonResponse({ error: "Text is required." }, 400);
+            const requestedEngine = String(body.engine || "").toLowerCase();
+            const configured = String(this.settings.tts_engine || "local").toLowerCase();
+            const engine = requestedEngine || configured;
+            if (engine === "browser") {
+                return jsonResponse({ error: "Browser TTS is client-side. Use SpeechSynthesis in the avatar window.", fallback: true }, 409);
+            }
+            // Cap synthesis length: local MMS-TTS is slow on long replies.
+            const cleanForTts = rawText.replace(/\s+/g, " ").trim().slice(0, 600);
+            const effectiveSettings = { ...this.settings, tts_engine: engine };
+            if (body.voice) effectiveSettings.openai_tts_voice = String(body.voice);
+            try {
+                const synthesizer =
+                    this.services.synthesizeSpeech ||
+                    ((await import("./audio.js")).synthesizeSpeech);
+                const tmpDir = path.join(process.cwd(), "tmp");
+                if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+                const ext = engine === "openai" ? ".mp3" : ".wav";
+                const tmpPath = path.join(tmpDir, `avatar_tts_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`);
+                await synthesizer(cleanForTts, tmpPath, effectiveSettings);
+                if (!fs.existsSync(tmpPath)) throw new Error("TTS produced no audio file.");
+                const buf = fs.readFileSync(tmpPath);
+                try { fs.unlinkSync(tmpPath); } catch {}
+                return new Response(buf, {
+                    headers: { "Content-Type": ext === ".mp3" ? "audio/mpeg" : "audio/wav" },
+                });
+            } catch (err) {
+                return jsonResponse({ error: `TTS failed: ${err.message || err}`, fallback: true }, 500);
+            }
         }
 
         if (req.method === "GET" && pathname === "/api/models") {
@@ -1213,6 +1444,12 @@ export class DashboardServer {
                 "voice_reply_enabled",
                 "project_path",
                 "dashboard_port",
+                "avatar_enabled",
+                "aifriend_enabled",
+                "aifrienddash_enabled",
+                "tts_engine",
+                "openai_tts_voice",
+                "openai_tts_model",
             ]);
             let changed = false;
             for (const [k, v] of Object.entries(patch || {})) {
@@ -1269,6 +1506,13 @@ export class DashboardServer {
             this.server = Bun.serve({
                 port: resolved,
                 hostname: BIND_HOST,
+                // Local MMS-TTS synthesis (plus LLM turns) routinely exceeds
+                // Bun's default ~10s idle timeout — the first local synthesis
+                // downloads the model and takes minutes. Without this the
+                // connection is closed with no response at all (Chrome shows
+                // net::ERR_EMPTY_RESPONSE) and the avatar never speaks
+                // dashboard replies. Mirrors the ollama-lite idleTimeout fix.
+                idleTimeout: 255,
                 fetch: (req) => self.handleRequest(req),
             });
             console.log("=========================================================================");

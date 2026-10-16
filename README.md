@@ -60,8 +60,9 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
 
 * **🌐 Live web search (`src/websearch.js` + `src/mcp_web_server.js`, zero new dependencies)**:
   * Mention **`@live-web` anywhere in a sentence** (`latest BTC price @live-web`) and the turn runs a real-time search whose results are injected as system context — so **every** provider (local Ollama + OpenAI/Gemini/Claude/Grok/Mistral cloud models) answers with current facts and `[1]`, `[2]` citations. Works on CLI, Telegram, WhatsApp, Web UI, and the Chrome side panel; works while PIN/OTP-locked (mid-sentence `@live-web` is chat, not a control command). (`@web` stays the voice-bridge toggle.)
-  * **Engines** (`auto` default): Brave Search API → Tavily → keyless DuckDuckGo fallback (Instant Answer abstract + HTML results merged, deduped). Explicit `@live-web <query>` / `@web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]`, `@web-fetch <url>` (page → plain text), `@web-status`.
-  * **MCP pair**: built-in `web` server (`web__web_search` / `web__web_fetch`) auto-registered next to `local`; keys via `@set-api-key brave|tavily <key>` (or `BRAVE_API_KEY` / `TAVILY_API_KEY`). Settings: `websearch_enabled` (default on), `websearch_provider`, `websearch_max_results` (1–10, default 5), `websearch_timeout_ms`. Unit-tested (`src/websearch.test.js`, mocked fetch — no network).
+  * Mention **`@live-gemini` anywhere in a sentence** (`explain black holes @live-gemini`) for Google AI Mode: Gemini API `google_search` grounding when `GEMINI_API_KEY` is set (AI answer + cited sources), else best-effort keyless Google scrape (`google.com/search?udm=50`), else DuckDuckGo fallback. Same inline/explicit/session rules as `@live-web`.
+  * **Engines** (`auto` default): Brave Search API → Tavily → keyless DuckDuckGo fallback (Instant Answer abstract + HTML results merged, deduped). Explicit `@live-web <query>` / `@live-gemini <query>` / `@web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N]`, `@web-fetch <url>` (page → plain text), `@web-status`.
+  * **MCP pair**: built-in `web` server (`web__web_search` / `web__web_fetch`) auto-registered next to `local`; keys via `@set-api-key brave|tavily|gemini <key>` (or `BRAVE_API_KEY` / `TAVILY_API_KEY` / `GEMINI_API_KEY`). Settings: `websearch_enabled` (default on), `websearch_provider`, `websearch_max_results` (1–10, default 5), `websearch_timeout_ms`, `gemini_search_model` (default `gemini-2.5-flash`). Unit-tested (`src/websearch.test.js`, mocked fetch — no network).
 
 * **🪡 Needle On-Device Tool Calling (`src/needle.js` + `src/needle_bridge.py`)**:
   * Cactus Needle (8-29 MB automation model, `pip install cactus-needle`) for grammar-constrained tool routing, typed extraction, and local embeddings — fully offline after the one-time weight download.
@@ -305,7 +306,24 @@ starter.bat --web
   ./starter.sh --dashboard-port 8899   # or DASHBOARD_PORT=8899
   ```
   Then open **`http://127.0.0.1:8768`** in your browser.
-  Sidebar chat list, model + persona pickers, quick `@` tools, settings panel, and a REST API (`/api/health`, `/api/chat`, `/api/sessions`, `/api/characters`, `/api/memories`, `/api/tasks`, `/api/stats`, `/api/settings`, `/api/models`, `/api/commands`). Chat turns reuse the normal memory + knowledge + session-context LLM flow. Toggle from inside the app with `@dashboard [port]` / `@dashboard off` (`@dash` alias). Shares the `web` PIN/OTP lock scope with the voice UI (`@lock` / `@unlock`, mutating REST endpoints return `423` while locked). Env: `DASHBOARD_ENABLED=1` to autostart, `DASHBOARD_PORT` for the port (settings: `dashboard_enabled`, `dashboard_port` in `app_settings.json`). Unit-tested (`src/dashboard.test.js`, no network).
+  Sidebar chat list, model + persona pickers, quick `@` tools, settings panel, and a REST API (`/api/health`, `/api/chat`, `/api/sessions`, `/api/characters`, `/api/memories`, `/api/tasks`, `/api/stats`, `/api/settings`, `/api/models`, `/api/commands`). Chat turns reuse the normal memory + knowledge + session-context LLM flow. Toggle from inside the app with `@dashboard [port]` / `@dashboard off` (`@dash` alias). Header buttons open the enabled popups: 👄 Avatar (`/avatar`), 🤖 AI Friend (`/aifriend`), 🤖💬 Bud Pro (`/aifrienddash`); the voice toggle fans AI replies out to the avatar / AI Friend popup for lipsync speech. Shares the `web` PIN/OTP lock scope with the voice UI (`@lock` / `@unlock`, mutating REST endpoints return `423` while locked). Env: `DASHBOARD_ENABLED=1` to autostart, `DASHBOARD_PORT` for the port (settings: `dashboard_enabled`, `dashboard_port` in `app_settings.json`). Unit-tested (`src/dashboard.test.js`, no network).
+* **Avatar lipsync popup (`avatar.html`, 🎃 pumpkin theme)**:
+  ```bash
+  ./starter.sh --avatar   # implies --dashboard; --no-avatar always wins
+  ```
+  Then open **`http://127.0.0.1:8768/avatar`** (or the Avatar button in the dashboard header) and press 🔊 Enable audio. The popup is the only audio player — dashboard AI replies are fanned out to it (BroadcastChannel + storage fallback) and spoken with sample-accurate lipsync via server TTS (`POST /api/tts`, local MMS-TTS or OpenAI), with automatic browser-voice fallback when server synthesis is slow or unreachable. Slow local-TTS turns no longer drop the connection (server `idleTimeout` raised — previously surfaced as `net::ERR_EMPTY_RESPONSE`).
+* **AI Friend avatar popup (`aifriend.html`, 🤖 AI Bud Pro character)**:
+  ```bash
+  ./starter.sh --aifriend   # implies --dashboard; --no-aifriend always wins
+  # or: AIFRIEND_ENABLED=1 bun run dashboard
+  ```
+  Then open **`http://127.0.0.1:8768/aifriend`** (or the 🤖 AI Friend button in the dashboard header) and press 🔊 Enable audio. Vanilla-JS port of `ai_bud_pro/src/LiveCharacter3D.tsx` (Three.js cat-eye 3D character + speech bubble, idle/listening/thinking/speaking states, mouth driven by the AI Bud Pro animation curve + live server-TTS audio volume). Like `/avatar`, it is the only audio player — dashboard AI replies fan out to it over both `dagowan-avatar` and `dagowan-aifriend` channels (+ localStorage fallback), so `--avatar` and `--aifriend` popups are interchangeable. Status at `GET /api/aifriend-status`.
+* **AI Friend dashboard (`aifrienddash.html`, 🤖💬 AI Bud Pro chat)**:
+  ```bash
+  ./starter.sh --aifrienddash   # implies --dashboard; --no-aifrienddash always wins
+  # or: AIFRIENDDASH_ENABLED=1 bun run dashboard
+  ```
+  Then open **`http://127.0.0.1:8768/aifrienddash`** (or the 🤖💬 Bud Pro button in the dashboard header). Vanilla-JS port of `ai_bud_pro/src/main.tsx` wired to the dagowan dashboard REST API (`/api/chat`, `/api/sessions`, `/api/characters`, `/api/memories`, `/api/models`, `/api/settings`) instead of Ollama directly: sessions, rename/delete, search across conversations + memories, persona/model pickers, memory manager, theme/font prefs, export, browser speech recognition, optional read-aloud with mini 3D avatar, and a ↗ pop-out to `/aifriend`. Status at `GET /api/aifrienddash-status`. Combine flags to serve everything at once: `./starter.sh --dashboard --avatar --aifriend --aifrienddash`.
 * **With WhatsApp Bridge** (opt-in; stays off unless a phone is linked or it is enabled):
   ```bash
   ./starter.sh --whatsapp
@@ -414,7 +432,8 @@ SEMANTIC_SCHOLAR_API_KEY=... # optional, free; raises @fact-check rate limits
 FACTCHECK_SOURCE=auto # @fact-check engine: auto|papers|gemini (Gemini verdict needs GEMINI_API_KEY)
 BRAVE_API_KEY=... # optional; upgrades live web search engine (auto-selected when set)
 TAVILY_API_KEY=... # optional; upgrades live web search engine (auto-selected when set)
-WEBSEARCH_PROVIDER=auto # live web search engine: auto|duckduckgo|brave|tavily (DuckDuckGo needs no key)
+GEMINI_SEARCH_MODEL=gemini-2.5-flash # @live-gemini Google AI Mode grounding model (needs GEMINI_API_KEY)
+WEBSEARCH_PROVIDER=auto # live web search engine: auto|duckduckgo|brave|tavily|google-ai (DuckDuckGo needs no key)
 WEBSEARCH_MAX_RESULTS=5 # live web search results per search (1-10)
 FACTCHECK_GEMINI_MODEL=gemini-2.5-flash
 ```
@@ -445,10 +464,11 @@ Inside the running application:
 
 ### 🌐 Live Web Search
 * Mention `@live-web` anywhere in a sentence (`latest BTC price @live-web`) — the turn runs a real-time search and injects the results into the model's context, on CLI, Telegram, WhatsApp, Web UI, and the Chrome side panel.
-* `@live-web <query>` / `@web-search <query> [--provider auto|duckduckgo|brave|tavily] [--limit N]` (or `@websearch`, `@search-web`) — Explicit search; results print as chat and persist to the session. (`@web` stays voice-only.)
+* Mention `@live-gemini` anywhere (`explain black holes @live-gemini`) — Google AI Mode search (Gemini `google_search` grounding with `GEMINI_API_KEY`, else keyless Google scrape, else DuckDuckGo fallback), same context injection as `@live-web`.
+* `@live-web <query>` / `@live-gemini <query>` / `@web-search <query> [--provider auto|duckduckgo|brave|tavily|google-ai] [--limit N]` (or `@websearch`, `@search-web`) — Explicit search; results print as chat and persist to the session. (`@web` stays voice-only.)
 * `@web-fetch <url>` (or `@webfetch`) — Fetch a page as plain text.
 * `@web-status` — Show engine configuration (provider chain, key status).
-* Engines: Brave → Tavily (with `@set-api-key brave|tavily <key>`) → keyless DuckDuckGo. MCP pair: `web__web_search` / `web__web_fetch`. Settings: `websearch_enabled`, `websearch_provider`, `websearch_max_results`, `websearch_timeout_ms`.
+* Engines: Brave → Tavily (with `@set-api-key brave|tavily <key>`) → keyless DuckDuckGo; Google AI Mode via `@live-gemini` / `--provider google-ai` (needs `@set-api-key gemini <key>` for grounded answers, else keyless scrape + DDG fallback). MCP pair: `web__web_search` / `web__web_fetch`. Settings: `websearch_enabled`, `websearch_provider`, `websearch_max_results`, `websearch_timeout_ms`, `gemini_search_model`.
 
 ### 🤖 LLM Models & Multi-Provider API Keys
 * `@models` — List all available models across local Ollama, OpenAI, Gemini, Claude, Grok, and Mistral.
@@ -667,7 +687,10 @@ The Blogger API needs a user OAuth token — no client-credentials flow exists. 
 │   └── bot.db                # SQLite database for persistent memories, knowledge, and learning logs
 ├── whatsapp_qr.html          # Web view for WhatsApp QR code & pairing
 ├── voice_interface.html      # Dagowan real-time voice web UI (security panel + commands browser)
-├── dashboard.html            # OpenWebUI-style dashboard UI (sidebar chats, model/persona pickers, settings panel → src/dashboard.js)
+├── dashboard.html            # OpenWebUI-style dashboard chat (model/persona pickers, sessions, settings panel, avatar/AI Friend fan-out)
+├── avatar.html               # Lipsync avatar popup served at /avatar (🎃 pumpkin theme, server TTS + browser-voice fallback)
+├── aifriend.html             # AI Friend avatar popup served at /aifriend (vanilla-JS port of ai_bud_pro LiveCharacter3D.tsx)
+├── aifrienddash.html         # AI Friend dashboard served at /aifrienddash (vanilla-JS port of ai_bud_pro main.tsx → dashboard REST API)
 ├── chrome-extension/         # MV3 companion sidebar widget v1.1.1 (chat + locks/unlocks + Ask-Dagowan context menu)
 │   ├── manifest.json         # MV3 manifest (side panel + popup fallback + service worker, 127.0.0.1:8767 host perms)
 │   ├── sidepanel.html / sidepanel.js # Sidebar widget: full-height WS client (text_prompt → llm_complete), lock badge, PIN/OTP inputs
@@ -711,7 +734,7 @@ The Blogger API needs a user OAuth token — no client-credentials flow exists. 
     ├── one_shot.js             # One-shot CLI (`bun run ask "<prompt>" [--model <name>]`, model from settings)
     ├── audio.js              # 100% Local STT (Whisper) & Local TTS (MMS-TTS) audio models
     ├── voice_socket.js       # Real-Time WebSocket Voice Bridge & Server
-    ├── dashboard.js            # OpenWebUI-style dashboard server (Bun.serve :8768, REST /api/*, @ command dispatch, web-scope lock)
+    ├── dashboard.js          # OpenWebUI-style dashboard server (/avatar, /aifriend, /aifrienddash, /api/* REST + TTS)
     ├── dashboard.test.js       # Dashboard flag/port/chat/lock unit tests (no network)
     ├── telegram.js           # Telegram bot runner integration with voice attachment support
     ├── whatsapp.js           # WhatsApp HTTP bridge server integration (group gate + DM mention router)

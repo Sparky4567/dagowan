@@ -40,8 +40,8 @@ RUN bunx --bun playwright install --with-deps chromium || bunx --bun playwright 
 RUN mkdir -p data backups logs tmp notes pdfs projects whatsapp_bridge/auth \
     && chmod +x docker-entrypoint.sh dockerize.sh starter.sh install.sh 2>/dev/null || true
 
-# Dagowan Voice Web UI / WhatsApp bridges
-EXPOSE 8765 8766 8767
+# Dagowan Voice Web UI / WhatsApp bridges / Dashboard
+EXPOSE 8765 8766 8767 8768
 
 ENV BIND_HOST=0.0.0.0 \
     HOST=0.0.0.0 \
@@ -49,6 +49,7 @@ ENV BIND_HOST=0.0.0.0 \
     WHATSAPP_STATUS_PORT=8766 \
     VOICE_PORT=8767 \
     WEB_PORT=8767 \
+    DASHBOARD_PORT=8768 \
     OLLAMA_HOST=http://host.docker.internal:11434
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

@@ -5,11 +5,17 @@ import {
     fetchPageText,
     formatWebResults,
     formatWebStatus,
+    getGeminiApiKey,
+    getGeminiSearchModel,
     getWebStatus,
+    isGeminiSearchConfigured,
     isWebSearchEnabled,
     isWebVoiceCommand,
     parseDuckHtmlResults,
     parseDuckInstantAnswer,
+    parseGoogleAiAnswer,
+    parseGoogleHtmlResults,
+    parseLiveGeminiInput,
     parseWebFetchCommand,
     parseWebSearchCommand,
     parseWebSearchInput,
@@ -17,13 +23,18 @@ import {
     resolveWebSearchLimit,
     resolveWebSearchProvider,
     resolveWebSearchTimeoutMs,
+    runLiveGeminiForPrompt,
     runWebSearchForPrompt,
     searchBrave,
     searchDuckDuckGo,
+    searchGeminiWithGrounding,
+    searchGoogleAi,
+    searchGoogleScrape,
     searchTavily,
     searchWeb,
     stripHtml,
     unwrapDuckHref,
+    unwrapGoogleHref,
 } from "./websearch.js";
 
 describe("websearch trigger parsing", () => {
@@ -67,12 +78,39 @@ describe("websearch trigger parsing", () => {
         expect(isWebVoiceCommand("@voice-socket")).toBe(true);
         expect(isWebVoiceCommand("@dagowan")).toBe(true);
         expect(isWebVoiceCommand("@live-web foo")).toBe(false);
+        expect(isWebVoiceCommand("@live-gemini foo")).toBe(false);
+    });
+
+    test("inline @live-gemini anywhere triggers Google AI Mode", () => {
+        expect(parseLiveGeminiInput("explain black holes @live-gemini please")).toEqual({
+            query: "explain black holes please",
+            stripped: true,
+        });
+        expect(parseLiveGeminiInput("@live-gemini what is the weather")).toEqual({
+            query: "what is the weather",
+            stripped: true,
+        });
+        expect(parseLiveGeminiInput("hello how are you")).toBeNull();
+        expect(parseLiveGeminiInput("@live-gemini")).toBeNull();
+        expect(parseLiveGeminiInput("")).toBeNull();
+        // @live-web parser must not fire on @live-gemini and vice versa.
+        expect(parseWebSearchInput("explain this @live-gemini")).toBeNull();
+        expect(parseLiveGeminiInput("latest BTC @live-web")).toBeNull();
     });
 
     test("explicit @web-search command form (plus @live-web leading form)", () => {
         const cmd = parseWebSearchCommand("@web-search latest BTC price");
         expect(cmd.query).toBe("latest BTC price");
         expect(parseWebSearchCommand("@live-web latest BTC price").query).toBe("latest BTC price");
+        expect(parseWebSearchCommand("@live-gemini latest BTC price")).toMatchObject({
+            query: "latest BTC price",
+            provider: "google-ai",
+        });
+        expect(parseWebSearchCommand("@web-search foo --provider gemini --limit 3")).toMatchObject({
+            query: "foo",
+            provider: "google-ai",
+            maxResults: 3,
+        });
         expect(parseWebSearchCommand("@websearch foo --provider brave --limit 3")).toMatchObject({
             query: "foo",
             provider: "brave",
@@ -80,6 +118,7 @@ describe("websearch trigger parsing", () => {
         });
         expect(parseWebSearchCommand("@web-search").query).toBe("");
         expect(parseWebSearchCommand("@live-web").query).toBe("");
+        expect(parseWebSearchCommand("@live-gemini").query).toBe("");
         expect(parseWebSearchCommand("just chatting")).toBeNull();
         expect(parseWebSearchCommand("@web latest BTC price")).toBeNull();
     });
@@ -105,6 +144,10 @@ describe("websearch settings", () => {
         expect(resolveWebSearchProvider("brave", {})).toBe("brave");
         expect(resolveWebSearchProvider("ddg", {})).toBe("duckduckgo");
         expect(resolveWebSearchProvider("tavily", {})).toBe("tavily");
+        expect(resolveWebSearchProvider("gemini", {})).toBe("google-ai");
+        expect(resolveWebSearchProvider("google", {})).toBe("google-ai");
+        expect(resolveWebSearchProvider("google-ai", {})).toBe("google-ai");
+        expect(resolveWebSearchProvider("live-gemini", {})).toBe("google-ai");
         expect(resolveWebSearchProvider(undefined, { websearch_provider: "brave" })).toBe("brave");
     });
 
@@ -126,7 +169,16 @@ describe("websearch settings", () => {
         expect(st.brave).toBe(true);
         expect(st.tavily).toBe(false);
         expect(st.duckduckgo).toBe(true);
+        expect(st.googleAi).toBe(true);
+        expect(st.gemini).toBe(false);
+        expect(getWebStatus({ gemini_api_key: "g" }).gemini).toBe(true);
         expect(formatWebStatus({})).toContain("@live-web");
+        expect(formatWebStatus({})).toContain("@live-gemini");
+        expect(getGeminiApiKey({ gemini_api_key: "g" })).toBe("g");
+        expect(isGeminiSearchConfigured({ gemini_api_key: "g" })).toBe(true);
+        expect(isGeminiSearchConfigured({})).toBe(false);
+        expect(getGeminiSearchModel({}, undefined)).toBe("gemini-2.5-flash");
+        expect(getGeminiSearchModel({ gemini_search_model: "custom" })).toBe("custom");
     });
 });
 
@@ -145,6 +197,27 @@ describe("websearch html helpers", () => {
     test("unwrapDuckHref decodes uddg redirects", () => {
         expect(unwrapDuckHref("//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fa&rut=x")).toBe("https://example.com/a");
         expect(unwrapDuckHref("https://example.com/plain")).toBe("https://example.com/plain");
+    });
+
+    test("unwrapGoogleHref decodes /url redirects", () => {
+        expect(unwrapGoogleHref("/url?q=https://example.com/a&sa=U&ved=x")).toBe("https://example.com/a");
+        expect(unwrapGoogleHref("https://example.com/plain")).toBe("https://example.com/plain");
+    });
+
+    test("parseGoogleHtmlResults extracts outbound links", () => {
+        const html = `
+            <a href="/url?q=https://example.com/1&sa=U"><h3>First Result Title Here</h3></a>
+            <a href="https://example.com/2"><h3>Second Result Title Longer</h3></a>
+            <a href="https://www.google.com/search?q=x">Google internal link here</a>`;
+        const res = parseGoogleHtmlResults(html, 5);
+        expect(res.length).toBe(2);
+        expect(res[0]).toMatchObject({ title: "First Result Title Here", url: "https://example.com/1" });
+        expect(res[1].url).toBe("https://example.com/2");
+    });
+
+    test("parseGoogleAiAnswer returns empty on JS challenge", () => {
+        expect(parseGoogleAiAnswer("<html>enablejs challenge</html>")).toBe("");
+        expect(parseGoogleAiAnswer("")).toBe("");
     });
 
     test("parseDuckHtmlResults pairs titles with snippets", () => {
@@ -254,6 +327,58 @@ describe("websearch engines (mocked fetch)", () => {
         const res = await searchWeb("   ", {}, {}, mockFetch([]));
         expect(res.success).toBe(false);
     });
+
+    test("searchGeminiWithGrounding needs a key and parses chunks", async () => {
+        const noKey = await searchGeminiWithGrounding("q", {}, mockFetch([]));
+        expect(noKey.success).toBe(false);
+        expect(noKey.error).toMatch(/Gemini API key/);
+        const ok = await searchGeminiWithGrounding("q", { gemini_api_key: "k" }, mockFetch([
+            ["generativelanguage.googleapis.com", {
+                candidates: [{
+                    content: { parts: [{ text: "Grounded answer here. " }] },
+                    groundingMetadata: { groundingChunks: [{ web: { uri: "https://g.example/a", title: "A title" } }] },
+                }],
+            }],
+        ]));
+        expect(ok.success).toBe(true);
+        expect(ok.provider).toBe("google-ai");
+        expect(ok.answer).toContain("Grounded");
+        expect(ok.results[0].url).toBe("https://g.example/a");
+    });
+
+    test("searchGoogleScrape parses classic links", async () => {
+        const html = `<a href="/url?q=https://example.com/1&sa=U"><h3>Example Link Title Here</h3></a>`;
+        const res = await searchGoogleScrape("q", {}, mockFetch([["google.com/search", html]]));
+        expect(res.success).toBe(true);
+        expect(res.provider).toBe("google-ai");
+        expect(res.results[0].url).toBe("https://example.com/1");
+    });
+
+    test("searchGoogleAi prefers grounding, falls back to scrape", async () => {
+        const grounded = await searchGoogleAi("q", { gemini_api_key: "k" }, mockFetch([
+            ["generativelanguage.googleapis.com", {
+                candidates: [{
+                    content: { parts: [{ text: "Answer." }] },
+                    groundingMetadata: { groundingChunks: [{ web: { uri: "https://g.example/x", title: "X" } }] },
+                }],
+            }],
+        ]));
+        expect(grounded.success).toBe(true);
+        expect(grounded.provider).toBe("google-ai");
+        expect(grounded.answer).toContain("Answer");
+    });
+
+    test("searchWeb google-ai falls back to duckduckgo", async () => {
+        const fetchFn = mockFetch([
+            ["google.com/search", "<html>enablejs</html>"],
+            ["html.duckduckgo.com", DDG_HTML],
+            ["api.duckduckgo.com", { RelatedTopics: [] }],
+        ]);
+        const res = await searchWeb("q", {}, { provider: "google-ai" }, fetchFn);
+        expect(res.success).toBe(true);
+        expect(res.provider).toBe("duckduckgo");
+        expect(res.fallback).toBe(true);
+    });
 });
 
 describe("websearch page fetch (mocked)", () => {
@@ -289,6 +414,19 @@ describe("websearch formatting + chat integration", () => {
         expect(formatWebResults({ success: false, error: "boom" })).toContain("boom");
     });
 
+    test("formatWebResults renders Google AI answers", () => {
+        const geminiRes = {
+            success: true, provider: "google-ai", query: "btc", answer: "BTC is up.",
+            results: [{ title: "BTC price", url: "https://example.com/btc", snippet: "100k" }],
+        };
+        const out = formatWebResults(geminiRes);
+        expect(out).toContain("Google AI Mode");
+        expect(out).toContain("BTC is up.");
+        const block = buildWebSystemBlock(geminiRes);
+        expect(block).toContain("Google AI Mode");
+        expect(block).toContain("BTC is up.");
+    });
+
     test("buildWebSystemBlock instructs citation", () => {
         const block = buildWebSystemBlock(good);
         expect(block).toContain("Live Web Search");
@@ -309,5 +447,44 @@ describe("websearch formatting + chat integration", () => {
         expect(await runWebSearchForPrompt("btc price @web", {}, fetchFn)).toEqual({ triggered: false });
         expect(await runWebSearchForPrompt("btc @live-web", { websearch_enabled: false }, fetchFn)).toEqual({ triggered: false });
         expect(await runWebSearchForPrompt("@live-web", {}, fetchFn)).toEqual({ triggered: false, reason: "usage" });
+    });
+
+    test("runWebSearchForPrompt triggers @live-gemini inline + explicit", async () => {
+        const fetchFn = mockFetch([
+            ["generativelanguage.googleapis.com", {
+                candidates: [{
+                    content: { parts: [{ text: "Gemini says hi. " }] },
+                    groundingMetadata: { groundingChunks: [{ web: { uri: "https://g.example/hi", title: "Hi" } }] },
+                }],
+            }],
+        ]);
+        const hit = await runWebSearchForPrompt("explain cats @live-gemini", { gemini_api_key: "k" }, fetchFn);
+        expect(hit.triggered).toBe(true);
+        expect(hit.query).toBe("explain cats");
+        expect(hit.searchRes.provider).toBe("google-ai");
+        expect(hit.block).toContain("Google AI Mode");
+        const explicit = await runWebSearchForPrompt("@live-gemini explain dogs", { gemini_api_key: "k" }, fetchFn);
+        expect(explicit.triggered).toBe(true);
+        expect(explicit.searchRes.provider).toBe("google-ai");
+        expect(await runWebSearchForPrompt("@live-gemini", {}, fetchFn)).toEqual({ triggered: false, reason: "usage" });
+        expect(await runWebSearchForPrompt("explain cats @live-gemini", { websearch_enabled: false }, fetchFn)).toEqual({ triggered: false });
+    });
+
+    test("runLiveGeminiForPrompt only fires for gemini token", async () => {
+        const fetchFn = mockFetch([
+            ["generativelanguage.googleapis.com", {
+                candidates: [{
+                    content: { parts: [{ text: "Answer. " }] },
+                    groundingMetadata: { groundingChunks: [{ web: { uri: "https://g.example/a", title: "A" } }] },
+                }],
+            }],
+            ["html.duckduckgo.com", DDG_HTML],
+            ["api.duckduckgo.com", { RelatedTopics: [] }],
+        ]);
+        const hit = await runLiveGeminiForPrompt("explain cats @live-gemini", { gemini_api_key: "k" }, fetchFn);
+        expect(hit.triggered).toBe(true);
+        expect(hit.searchRes.provider).toBe("google-ai");
+        expect(await runLiveGeminiForPrompt("latest BTC @live-web", {}, fetchFn)).toEqual({ triggered: false });
+        expect(await runLiveGeminiForPrompt("plain chat", {}, fetchFn)).toEqual({ triggered: false });
     });
 });
