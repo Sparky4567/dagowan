@@ -174,6 +174,7 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * Run `@insight [optional focus]` and the active LLM writes today's reflection (3-6 bullets: what mattered, what it learned about the user, what to remember tomorrow, one thing to improve) — one entry per character per day (re-running the same day refreshes it). Falls back to a deterministic template when the LLM is unreachable, so the command never fails silently.
   * Manage with `@insights [N]` (or `@insight-list`), `@insight-search <query>`, `@insight-show <id|YYYY-MM-DD>`, `@insight-delete <id|YYYY-MM-DD>`, `@insight-status`. Per-character scoped like memories; unit-tested in `src/reflections.test.js`.
   * Later turns recall relevant reflections by association and inject them as `[Relevant Self-Reflections]` alongside memories/knowledge/sessions (`src/chat_context.js` + all chat pipelines), deepening existing knowledge over time.
+  * **Adaptive auto-insight (`src/auto_insight.js`, ON by default):** after every completed exchange on CLI / Telegram / WhatsApp / voice / Dashboard, a background gate counts *substantive* turns (≥24 chars, not trivial chitchat, not `@` commands). Every N turns (default 8) + cooldown (default 30 min, max 6/day) it writes a 1-2 bullet micro self-observation (`source:auto-insight`) into the same bank — never blocks the reply. Control with `@insight-auto [on|off|status|every <n>|cooldown <mins>]`; settings `insight_auto_enabled / insight_auto_every_n / insight_auto_cooldown_minutes / insight_auto_min_chars / insight_auto_max_per_day`. Unit-tested in `src/auto_insight.test.js`.
   * Lock-gated like any control command: needs `@otp-login` (+ `@unlock <pin>` when a PIN is set) on CLI, Telegram, WhatsApp, Web UI/voice, Dashboard, and Chrome side panel (via the shared Web bridge); regular chatting always works while locked.
 
 * **💾 Backup & Restore State**:
@@ -546,6 +547,7 @@ Inside the running application:
 * `@insight-show <id|YYYY-MM-DD>` — Show one reflection entry.
 * `@insight-delete <id|YYYY-MM-DD>` — Delete one reflection entry.
 * `@insight-status` — Show reflection count and latest entry for the active character.
+* `@insight-auto [on|off|status|every <n>|cooldown <mins>]` — Background micro self-memory: every N substantive turns + cooldown, stored as `source:auto-insight` (enabled by default; same lock-gating / surfaces as `@insight`).
 
 ### 🎭 Character Profiles & Personas
 * `@character [name|id]` — View or switch active character persona profile (wakes its Telegram polling on demand).

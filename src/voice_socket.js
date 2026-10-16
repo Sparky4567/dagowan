@@ -987,6 +987,19 @@ export class LocalVoiceSocketBridge {
             // Daily self-reflections (@insight family; lock-gated above).
             {
                 try {
+                    const { parseAutoInsightCommand, handleAutoInsightCommand } = await import("./auto_insight.js");
+                    if (parseAutoInsightCommand(trimmedText)) {
+                        const { saveSettings } = await import("./config.js");
+                        const res = await handleAutoInsightCommand(trimmedText, {
+                            settings: this.settings,
+                            persist: (s) => { try { saveSettings(s); } catch {} },
+                        });
+                        if (res.handled) {
+                            this.send(ws, { event: "state_change", state: "idle" });
+                            this.send(ws, { event: "llm_complete", text: res.reply });
+                            return;
+                        }
+                    }
                     const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
                     if (parseInsightCommand(trimmedText)) {
                         const res = await handleReflectionBridgeCommand(trimmedText, {
@@ -1131,6 +1144,19 @@ export class LocalVoiceSocketBridge {
                         characterId: activeChar.id,
                     }).catch(() => {});
                 }
+
+                // Adaptive auto-insight (background, never blocks the reply).
+                try {
+                    const { maybeAutoInsight } = await import("./auto_insight.js");
+                    maybeAutoInsight({
+                        settings: this.settings,
+                        characterId: activeChar.id,
+                        personaName: activeChar.name,
+                        userText: trimmedText,
+                        sessionMessages,
+                        ollamaClient: ollama,
+                    }).catch(() => {});
+                } catch {}
             }
 
             this.send(ws, { event: "llm_complete", text: replyText });

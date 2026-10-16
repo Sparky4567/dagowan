@@ -195,6 +195,7 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @insight-search <query> — Search the reflection bank by association
 • @insight-show <id|YYYY-MM-DD> — Show one reflection entry
 • @insight-delete <id|YYYY-MM-DD> — Delete one reflection entry
+• @insight-auto [on|off|status|every <n>|cooldown <mins>] — Adaptive background self-memory: micro-insight every N substantive turns (default 8, ≥24 chars, skips trivial/commands) + cooldown; stored as source:auto-insight and recalled like daily reflections
 
 🎭 Character Profiles & Persona Commands:
 • @model [model-name] — View or switch active LLM model (supports Ollama, Gemini, Claude, Grok, Mistral, ChatGPT)
@@ -496,6 +497,17 @@ export async function handleAtCommand({
 
     // ---- Daily self-reflections (@insight family; lock-gated like any control command) ----
     {
+        const { handleAutoInsightCommand, parseAutoInsightCommand } = await import("./auto_insight.js");
+        if (parseAutoInsightCommand(rawInput)) {
+            const res = await handleAutoInsightCommand(rawInput, {
+                settings: (context && context.settings) || {},
+                persist: (s) => saveSettings(s),
+            });
+            if (res.handled) {
+                console.log(`\n${res.reply}\n`);
+                return { handled: true };
+            }
+        }
         const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
         if (parseInsightCommand(rawInput)) {
             let activeCharId = null;

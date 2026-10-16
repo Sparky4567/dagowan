@@ -295,6 +295,17 @@ export class TelegramBotRunner {
         // Daily self-reflections (@insight family; lock-gated above).
         {
             try {
+                const { parseAutoInsightCommand, handleAutoInsightCommand } = await import("./auto_insight.js");
+                if (parseAutoInsightCommand(msgText)) {
+                    const res = await handleAutoInsightCommand(msgText, {
+                        settings: this.settings,
+                        persist: (s) => { try { saveSettings(s); } catch {} },
+                    });
+                    if (res.handled) {
+                        await this.sendMessage(chatId, res.reply);
+                        return;
+                    }
+                }
                 const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
                 if (parseInsightCommand(msgText)) {
                     const { Ollama } = await import("ollama");
@@ -982,6 +993,19 @@ export class TelegramBotRunner {
                         characterId: activeChar.id,
                     }).catch(() => {});
                 }
+
+                // Adaptive auto-insight (background, never blocks the reply).
+                try {
+                    const { maybeAutoInsight } = await import("./auto_insight.js");
+                    maybeAutoInsight({
+                        settings: this.settings,
+                        characterId: activeChar.id,
+                        personaName: activeChar.name,
+                        userText: msgText,
+                        sessionMessages,
+                        ollamaClient: ollama,
+                    }).catch(() => {});
+                } catch {}
             }
 
             // Synthesize and send local voice note response if voice_reply is enabled

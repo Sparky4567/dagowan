@@ -319,7 +319,7 @@ const CONTROL_WORDS = new Set([
     "mcp-disable", "simulation", "simulations", "simulation-search",
     "simulation-show", "simulation-review", "insight", "insights",
     "insight-search", "insight-show", "insight-list", "insight-delete",
-    "insight-status",
+    "insight-status", "insight-auto",
 ]);
 
 const CONTROL_PREFIXES = [

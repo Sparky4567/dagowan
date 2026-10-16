@@ -600,6 +600,20 @@ async function main() {
                         characterId: activeCharIdNow,
                     }).catch(() => {});
                 }
+
+                // Adaptive auto-insight: micro self-observation every N
+                // substantive turns (background, never blocks the reply).
+                try {
+                    const { maybeAutoInsight } = await import("./src/auto_insight.js");
+                    maybeAutoInsight({
+                        settings: context.settings,
+                        characterId: activeCharIdNow,
+                        personaName: activeCharNow?.name || activeCharIdNow,
+                        userText: userInput,
+                        sessionMessages: context.messages,
+                        ollamaClient,
+                    }).catch(() => {});
+                } catch {}
             }
 
             // Synthesize local speech response if enabled

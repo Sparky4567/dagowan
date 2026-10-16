@@ -73,6 +73,7 @@ export function dashboardHelpText(settings = {}) {
         `• @opencli <task> / @opencode <task> / @opencode-setup — coding agents`,
         `• @simulation <name> / @simulation-end / @simulations — persona sub-chat`,
         `• @insight [focus] / @insights / @insight-search <q> / @insight-show <id> — daily self-reflections (separate bank in data/reflections.json)`,
+        `• @insight-auto [on|off|status|every <n>] — background micro-insights every N substantive turns`,
         `• @lock / @unlock <pin> / @security-status — security PIN (locks control commands, chat always works)`,
         `• @otp-set / @otp-login <code> / @otp-lock / @otp-status — OTP 2FA (needed before @unlock when enrolled)`,
         `• Security unlocks last ${unlockMinutes} minute(s) per surface (security_unlock_minutes).`,
@@ -611,6 +612,19 @@ export class DashboardServer {
                 .catch(() => {});
         }
 
+        // Adaptive auto-insight (background, never blocks the reply).
+        try {
+            const { maybeAutoInsight } = await import("./auto_insight.js");
+            maybeAutoInsight({
+                settings: this.settings,
+                characterId: activeCharId,
+                personaName: activeChar.name,
+                userText: text,
+                sessionMessages,
+                ollamaClient,
+            }).catch(() => {});
+        } catch {}
+
         return { reply: replyText, sessionId: session.id, characterId: activeCharId, command: false };
     }
 
@@ -1059,6 +1073,14 @@ export class DashboardServer {
 
         // ---- Daily self-reflections (@insight family; lock-gated by caller) ----
         try {
+            const auto = await import("./auto_insight.js");
+            if (auto.parseAutoInsightCommand(text)) {
+                const res = await auto.handleAutoInsightCommand(text, {
+                    settings: this.settings,
+                    persist: () => { try { saveSettings(this.settings); } catch {} },
+                });
+                if (res.handled) return res.reply;
+            }
             const ref = await import("./reflections.js");
             if (ref.parseInsightCommand(text)) {
                 const { Ollama } = await import("ollama");

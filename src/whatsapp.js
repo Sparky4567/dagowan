@@ -409,6 +409,15 @@ export class WhatsAppBridgeServer {
         // Daily self-reflections (@insight family; lock-gated above).
         {
             try {
+                const { parseAutoInsightCommand, handleAutoInsightCommand } = await import("./auto_insight.js");
+                if (parseAutoInsightCommand(trimmedPrompt)) {
+                    const { saveSettings } = await import("./config.js");
+                    const res = await handleAutoInsightCommand(trimmedPrompt, {
+                        settings: this.settings,
+                        persist: (s) => { try { saveSettings(s); } catch {} },
+                    });
+                    if (res.handled) return res.reply;
+                }
                 const { parseInsightCommand, handleReflectionBridgeCommand } = await import("./reflections.js");
                 if (parseInsightCommand(trimmedPrompt)) {
                     const { Ollama } = await import("ollama");
@@ -1037,6 +1046,19 @@ export class WhatsAppBridgeServer {
                     characterId: character.id,
                 }).catch(() => {});
             }
+
+            // Adaptive auto-insight (background, never blocks the reply).
+            try {
+                const { maybeAutoInsight } = await import("./auto_insight.js");
+                maybeAutoInsight({
+                    settings: this.settings,
+                    characterId: character.id,
+                    personaName: character.name,
+                    userText: promptText,
+                    sessionMessages,
+                    ollamaClient: ollama,
+                }).catch(() => {});
+            } catch {}
 
             return reply;
         } catch (err) {
