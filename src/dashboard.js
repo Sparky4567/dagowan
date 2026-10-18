@@ -18,6 +18,7 @@ import {
     retrieveSessionContext,
 } from "./sessions.js";
 import { loadMemories, remember, retrieveMemories } from "./memory.js";
+import { handleNeuromorphicCommand } from "./neuromorphic_command.js";
 import { retrieveKnowledge } from "./knowledge.js";
 import { getLearningPipeline, getLearningStats } from "./learning.js";
 import { unifiedChat as defaultUnifiedChat, DEFAULT_MODELS, getApiKey } from "./providers.js";
@@ -395,6 +396,15 @@ export class DashboardServer {
         if (cmdLower === "/help" || cmdLower === "/commands" || cmdLower === "/get-commands") {
             return finishCommand(dashboardHelpText(this.settings));
         }
+        // Neuromorphic Cognitive Memory control plane (@neuromorphic-memory / @nc-mem)
+        if (cmdLower === "/neuromorphic-memory" || cmdLower === "/nc-mem" || cmdLower.startsWith("/neuromorphic-memory ") || cmdLower.startsWith("/nc-mem ")) {
+            const nmRes = handleNeuromorphicCommand(cmdLower, this.settings, () => {
+                try { saveSettings(this.settings); } catch {}
+            });
+            if (nmRes.handled) {
+                return finishCommand(nmRes.reply);
+            }
+        }
         if (cmdLower === "/stats" || cmdLower === "/learning-stats" || cmdLower === "/get-stats") {
             const stats = getLearningStats();
             const lines = [
@@ -409,6 +419,15 @@ export class DashboardServer {
                 `💡 Candidate Rules:     ${stats.candidateRules}`,
                 `📜 Learning Events:     ${stats.totalLearningLogs}`,
             ];
+            if (stats.neuromorphic) {
+                const n = stats.neuromorphic;
+                lines.push(
+                    ``,
+                    `🧠 Neuromorphic Memory:`,
+                    `  Enabled: ${n.enabled} | Traces: ${n.traceCount} (avg activation ${n.avgActivation}, high ${n.highActivationMemories})`,
+                    `  Hebbian links: ${n.synapseCount} | Decay: ${n.decayRate}/day | Spike: ${n.spikeAmount} | Assoc: ${n.associationBoost}`,
+                );
+            }
             return finishCommand(lines.join("\n"));
         }
         if (cmdLower === "/models") {

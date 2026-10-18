@@ -7,6 +7,7 @@ import { loadSettings, saveSettings, exportSettings, importSettings } from "./co
 import { loadCharacterStore, getActiveCharacter, composeSystemTemplate } from "./characters.js";
 import { loadSession, createSession, saveSession, retrieveSessionContext, listSessions } from "./sessions.js";
 import { loadMemories, remember, retrieveMemories } from "./memory.js";
+import { handleNeuromorphicCommand } from "./neuromorphic_command.js";
 import { retrieveKnowledge } from "./knowledge.js";
 import { getLearningPipeline, getLearningStats } from "./learning.js";
 import { DEFAULT_MODELS, getApiKey } from "./providers.js";
@@ -476,6 +477,17 @@ export class LocalVoiceSocketBridge {
                 const done = (reply) => {
                     this.answerCommand(ws, { text: trimmedText, session, sessionMessages, activeChar, reply });
                 };
+
+                // Neuromorphic Cognitive Memory control plane (@neuromorphic-memory / @nc-mem)
+                {
+                    const nmRes = handleNeuromorphicCommand(cmdLower, this.settings, () => {
+                        try { saveSettings(this.settings); } catch {}
+                    });
+                    if (nmRes.handled) {
+                        done(nmRes.reply);
+                        return;
+                    }
+                }
 
                 // Ollama CLI @make
                 if (cmdLower.startsWith("/make") || cmdLower === "/make") {

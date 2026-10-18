@@ -69,6 +69,54 @@ export class BotDatabase {
             this.db.exec("CREATE INDEX IF NOT EXISTS idx_memories_character ON memories(character_id);");
             this.db.exec("CREATE INDEX IF NOT EXISTS idx_memories_language ON memories(language);");
         } catch {}
+
+        // Neuromorphic Cognitive Memory tables (additive; safe on existing DBs).
+        try {
+            this.db.exec(`
+                CREATE TABLE IF NOT EXISTS memory_traces (
+                    memory_id TEXT PRIMARY KEY,
+                    activation REAL NOT NULL DEFAULT 0.5,
+                    last_spike_at TEXT NOT NULL,
+                    decay_rate REAL NOT NULL DEFAULT 0.02,
+                    FOREIGN KEY(memory_id) REFERENCES memories(id)
+                );
+                CREATE TABLE IF NOT EXISTS memory_synapses (
+                    id TEXT PRIMARY KEY,
+                    source_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    weight REAL NOT NULL DEFAULT 0.1,
+                    last_coactivated TEXT NOT NULL,
+                    FOREIGN KEY(source_id) REFERENCES memories(id),
+                    FOREIGN KEY(target_id) REFERENCES memories(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_traces_activation ON memory_traces(activation);
+                CREATE INDEX IF NOT EXISTS idx_memory_synapses_source ON memory_synapses(source_id);
+                CREATE INDEX IF NOT EXISTS idx_memory_synapses_target ON memory_synapses(target_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_synapses_pair ON memory_synapses(source_id, target_id);
+            `);
+        } catch {}
+    }
+
+    getNeuromorphicStats() {
+        let traceCount = 0;
+        let synapseCount = 0;
+        let avgActivation = 0;
+        let highActivation = 0;
+        try {
+            traceCount = this.get("SELECT COUNT(*) as c FROM memory_traces")?.c ?? 0;
+            synapseCount = this.get("SELECT COUNT(*) as c FROM memory_synapses")?.c ?? 0;
+            const agg = this.get(
+                "SELECT AVG(activation) as avgA, SUM(CASE WHEN activation >= 0.7 THEN 1 ELSE 0 END) as hi FROM memory_traces"
+            );
+            avgActivation = Number((agg && agg.avgA) || 0);
+            highActivation = Number((agg && agg.hi) || 0);
+        } catch {}
+        return {
+            traceCount,
+            synapseCount,
+            avgActivation: Number(avgActivation.toFixed(3)),
+            highActivationMemories: highActivation,
+        };
     }
 
     get raw() {
@@ -182,6 +230,7 @@ export class BotDatabase {
             candidateRules,
             totalLearningLogs: totalLogs,
             strategies,
+            neuromorphic: this.getNeuromorphicStats(),
         };
     }
 }

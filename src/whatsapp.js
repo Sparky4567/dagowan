@@ -9,6 +9,7 @@ import { tryNeedleFastPath } from "./needle.js";
 import { transcribeAudioLocal, synthesizeSpeechLocal } from "./audio.js";
 
 import { loadMemories, remember, retrieveMemories } from "./memory.js";
+import { handleNeuromorphicCommand } from "./neuromorphic_command.js";
 import { retrieveKnowledge } from "./knowledge.js";
 import { getLearningPipeline } from "./learning.js";
 import {
@@ -461,6 +462,16 @@ export class WhatsAppBridgeServer {
         // Commands handling
         if (lower === "/help" || lower === "/commands" || lower === "/get-commands") {
             return buildCommandsHelp(this.settings);
+        }
+
+        // Neuromorphic Cognitive Memory control plane (@neuromorphic-memory / @nc-mem)
+        {
+            const nmRes = handleNeuromorphicCommand(lower, this.settings, () => {
+                try { saveSettings(this.settings); } catch {}
+            });
+            if (nmRes.handled) {
+                return nmRes.reply;
+            }
         }
 
         // Ollama CLI @make

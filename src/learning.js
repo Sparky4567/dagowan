@@ -348,6 +348,13 @@ ${assistantResponse}`;
             this.db.logLearningEvent("extraction_error", { error: err.message || String(err) });
         }
 
+        // Neuromorphic consolidation: promote repeatedly activated traces
+        // (short-term -> long-term). Throttled internally, non-blocking.
+        try {
+            const { getNeuromorphicMemory } = await import("./neuromorphic_memory.js");
+            getNeuromorphicMemory().consolidate().catch(() => {});
+        } catch {}
+
         return result;
     }
 

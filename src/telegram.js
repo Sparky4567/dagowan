@@ -4,6 +4,7 @@ import path from "node:path";
 import ollama from "ollama";
 import { unifiedChat } from "./providers.js";
 import { loadMemories, remember, retrieveMemories } from "./memory.js";
+import { handleNeuromorphicCommand } from "./neuromorphic_command.js";
 import { retrieveKnowledge } from "./knowledge.js";
 import { getLearningPipeline } from "./learning.js";
 import { transcribeAudioLocal, synthesizeSpeechLocal } from "./audio.js";
@@ -366,6 +367,17 @@ export class TelegramBotRunner {
         if (lower === "/help" || lower === "/commands" || lower === "/get-commands") {
             await this.sendMessage(chatId, buildCommandsHelp(this.settings));
             return;
+        }
+
+        // Neuromorphic Cognitive Memory control plane (@neuromorphic-memory / @nc-mem)
+        {
+            const nmRes = handleNeuromorphicCommand(lower, this.settings, () => {
+                try { saveSettings(this.settings); } catch {}
+            });
+            if (nmRes.handled) {
+                await this.sendMessage(chatId, nmRes.reply);
+                return;
+            }
         }
 
         // Ollama CLI @make

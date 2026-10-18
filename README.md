@@ -132,6 +132,7 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * **Conflict Resolution & Automatic Superseding**: Automatically detects contradictions and topic updates, marking superseded memories when facts, preferences, or tools change.
   * **Versioned Structured Knowledge Base (`src/knowledge.js`)**: Stores modular concepts, definitions, and procedures with semantic versioning (`v1`, `v2`, ...), change reasons, and audit trails.
   * **TF-IDF & Token Relevance Search**: Advanced ranking with inverse document frequency, importance/confidence boosts, correction priority weighting, and title match boosts.
+  * **Neuromorphic Cognitive Memory (plasticity layer)**: Additive activation-based re-ranking over TF-IDF retrieval (`src/neuromorphic_memory.js`, `src/neuromorphic_command.js`). Every memory carries an activation level that spikes on retrieval, decays over time (forgetting curve), and is boosted by Hebbian "fire together, wire together" links between memories co-retrieved in the same turn. Activation also weights importance, confidence, and type salience (corrections/projects/goals boosted), so frequently-used memories rise to the top while stale ones fade. Background **consolidation** promotes repeatedly-activated traces (short-term → long-term) after each turn; **pruning** marks decayed, idle memories as forgotten. Per-memory traces (`activation`, `last_spike_at`, `decay_rate`) and Hebbian synapses (`weight`, `last_coactivated`) live in additive `memory_traces` / `memory_synapses` tables in `data/bot.db` — no migration required. Enabled by default; control via `@neuromorphic-memory` / `@nc-mem` (`status | toggle | consolidate | prune | spikes | help`) on CLI, Telegram, WhatsApp, Voice Web, and Dashboard. `@stats` reports trace/synapse counts and average activation. Works across all surfaces transparently — retrieval results are re-scored without changing existing `@remember`/`@memories`/`@forget` behavior.
   * **Background Continuous Learning Pipeline (`src/learning.js`)**:
     * **Instant Deterministic Heuristics**: Captures explicit corrections ("Actually, I changed it..."), projects ("I am building..."), preferences ("I prefer..."), and goals in real-time.
     * **Asynchronous Deep LLM Extraction**: Deep post-turn extraction analyzing conversations to discover durable facts, structured knowledge, and explicit corrections without latency overhead. LLM replies are parsed tolerantly (`safeParseLlmJson`): strips ```json fences, uses balanced-brace extraction, and auto-repairs `1.` → `1.0`, `.8` → `0.8`, and trailing commas — so malformed numbers no longer drop the turn as `extraction_error`.
@@ -531,12 +532,13 @@ Inside the running application:
 * `@memory-langs` — Show per-language memory pool counts.
 * `@forget <id|index>` (or `@delete-memory`) — Deactivate/forget a specific memory by ID or index (only within the active character's visible pool).
 * `@update-memory <id|index> <new text>` — Update memory content (only within the active character's visible pool).
+* `@neuromorphic-memory / @nc-mem [status|toggle|consolidate|prune|spikes|help]` — Neuromorphic Cognitive Memory control plane: plasticity (activation/decay/Hebbian) re-ranking of memory retrieval (enabled by default; works on CLI, Telegram, WhatsApp, Voice Web, Dashboard).
 * `@correct <statement>` — Submit an explicit user correction for the ACTIVE character (superseding conflicting prior beliefs in its pool).
 * `@knowledge [query]` (or `@list-knowledge`) — List or search knowledge base concepts & entries.
 * `@teach <title: content>` — Explicitly teach the bot a structured concept or definition.
 * `@knowledge-history <id>` — View version history of a knowledge concept.
 * `@delete-knowledge <id>` — Deprecate/remove a knowledge entry.
-* `@stats` (or `@learning-stats`) — Display database, memory, knowledge, and learning statistics (includes a per-character memory breakdown).
+* `@stats` (or `@learning-stats`) — Display database, memory, knowledge, and learning statistics (includes a per-character memory breakdown + neuromorphic trace/synapse counts when plasticity is enabled).
 * `@learning-logs [limit]` — View recent incremental learning events log.
 * `@set-learning [on|off]` (or `@auto-learning`) — Toggle automatic background LLM learning extraction.
 * `@rules [status]` — Inspect candidate and approved pattern rules.

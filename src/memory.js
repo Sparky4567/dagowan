@@ -13,6 +13,7 @@ import {
     languageName,
     normalizeLanguageCode,
 } from "./language.js";
+import { getNeuromorphicMemory } from "./neuromorphic_memory.js";
 
 const MEMORY_FILE = "memory.json";
 
@@ -835,8 +836,12 @@ export class MemoryRetriever {
 
         const scoredList = [...primary, ...bridge];
         if (scoredList.length > 0) {
-            scoredList.sort((a, b) => b.score - a.score);
-            return scoredList.slice(0, limit);
+            const neuro = getNeuromorphicMemory();
+            const now = new Date().toISOString();
+            const ranked = neuro.isEnabled()
+                ? neuro.applyScoring(scoredList, limit, now)
+                : scoredList.sort((a, b) => b.score - a.score);
+            return ranked.slice(0, limit);
         }
 
         // Fallback: nothing matched in-language nor via bridge — return recent

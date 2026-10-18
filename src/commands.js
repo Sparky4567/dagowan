@@ -8,6 +8,7 @@ import {
     getMemoryStore,
     retrieveMemories,
 } from "./memory.js";
+import { handleNeuromorphicCommand } from "./neuromorphic_command.js";
 import {
     KnowledgeStore,
     KnowledgeRetriever,
@@ -180,6 +181,7 @@ const COMMANDS_HELP_TEMPLATE = `🤖 Available Commands in Ollama Chat (Bun / m-
 • @memory-langs — Show per-language memory counts (lt / en / es / it / … pools)
 • @forget <id|index> (or @delete-memory) — Deactivate/forget a specific memory by ID or index
 • @update-memory <id|index> <text> — Update memory content by index or ID
+• @neuromorphic-memory / @nc-mem [status|toggle|consolidate|prune|spikes|help] — Neuromorphic Cognitive Memory: plasticity (activation/decay/Hebbian) re-ranking of memory retrieval
 • @correct <statement> — Submit explicit user correction (superseding conflicting prior beliefs)
 • @knowledge [query] (or @list-knowledge) — List or search knowledge base concepts & entries
 • @teach <title: content> — Explicitly teach the bot a structured concept or definition
@@ -1002,6 +1004,15 @@ export async function handleAtCommand({
         return { handled: true };
     }
 
+    // Memory - @neuromorphic-memory / @nc-mem (plasticity layer over Eliza memory)
+    if (lower === "/neuromorphic-memory" || lower === "/nc-mem" || lower.startsWith("/neuromorphic-memory ") || lower.startsWith("/nc-mem ")) {
+        const nmRes = handleNeuromorphicCommand(rawInput, context && context.settings, saveSettings);
+        if (nmRes.handled) {
+            console.log(`\n${nmRes.reply}\n`);
+            return { handled: true };
+        }
+    }
+
     // Memory - @update-memory (scoped to active character; sim-aware)
     if (lower.startsWith("/update-memory ")) {
         const parts = input.slice(15).trim().split(/\s+/);
@@ -1180,6 +1191,15 @@ export async function handleAtCommand({
         console.log(`🎯 Active Rules:        ${stats.activeRules}`);
         console.log(`💡 Candidate Rules:     ${stats.candidateRules}`);
         console.log(`📜 Learning Events:     ${stats.totalLearningLogs}`);
+        if (stats.neuromorphic) {
+            const n = stats.neuromorphic;
+            console.log(`-------------------------------------------------------`);
+            console.log(`🧠 Neuromorphic Memory (plasticity layer):`);
+            console.log(`  Enabled:        ${n.enabled}`);
+            console.log(`  Traces:         ${n.traceCount} (avg activation ${n.avgActivation}, high ${n.highActivationMemories})`);
+            console.log(`  Hebbian links:  ${n.synapseCount} (max ${n.maxSynapsesPerMemory}/memory)`);
+            console.log(`  Decay:          ${n.decayRate}/day | Spike: ${n.spikeAmount} | Assoc: ${n.associationBoost}`);
+        }
         if (stats.strategies && stats.strategies.length > 0) {
             console.log(`-------------------------------------------------------`);
             console.log(`📈 Strategy Stats:`);

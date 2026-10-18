@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { loadSettings, saveSettings } from "./src/config.js";
+import { getNeuromorphicMemory } from "./src/neuromorphic_memory.js";
 import {
     loadCharacterStore,
     getActiveCharacter,
@@ -58,6 +59,10 @@ import {
 async function main() {
     // 1. Load configuration and data
     const settings = loadSettings();
+    // Configure the shared Neuromorphic Cognitive Memory singleton from settings
+    // so every surface (CLI / Telegram / WhatsApp / voice / dashboard) uses the
+    // same enabled state and plasticity parameters.
+    try { getNeuromorphicMemory().applySettings(settings); } catch {}
 
     // Docker / env override: OLLAMA_HOST, OLLAMA_URL or OLLAMA_BASE_URL wins over
     // stored settings so the container can point at a host-side or compose Ollama.

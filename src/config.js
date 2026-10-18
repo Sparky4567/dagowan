@@ -129,6 +129,16 @@ export const DEFAULT_SETTINGS = {
     cast_transcode: "auto",
     cast_max_height: 0,
     cast_scan_timeout_ms: 4000,
+    // --- Neuromorphic Cognitive Memory (plasticity layer over Eliza memory) ---
+    neuromorphic_memory_enabled: true,
+    neuromorphic_decay_rate: 0.02,
+    neuromorphic_spike_amount: 0.15,
+    neuromorphic_hebbian_weight: 0.05,
+    neuromorphic_association_boost: 0.30,
+    neuromorphic_consolidation_threshold: 0.70,
+    neuromorphic_prune_threshold: 0.05,
+    neuromorphic_max_synapses_per_memory: 8,
+    neuromorphic_consolidate_interval_ms: 600000,
 };
 
 export function loadSettings(filePath = APP_SETTINGS_FILE) {
