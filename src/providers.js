@@ -8,7 +8,7 @@ import { Ollama } from "ollama";
 import { memoize } from "./utils/memoize.js";
 import { isEphemeralEnabled, runOllamaLiteOnce } from "./ollama_ephemeral.js";
 
-loadDotenv();
+loadDotenv({ quiet: true });
 
 export const DEFAULT_MODELS = {
     ollama: ["llama3", "mistral", "qwen2.5", "phi3", "llama3.1", "deepseek-r1"],

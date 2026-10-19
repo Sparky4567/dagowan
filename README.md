@@ -850,3 +850,14 @@ This public repository ships **without any credentials**:
 ## 📜 License
 
 MIT License © Andrius Pratusis
+
+## MCP Server mode
+
+Run `bun run mcp` (or `bun run index.js --mcp`) to expose Dagowan as an MCP server (stdio + HTTP/SSE) for any MCP-capable assistant.
+
+- HTTP Streamable endpoint: `http://0.0.0.0:${MCP_PORT:-8790}/mcp`
+- Legacy SSE endpoint: `http://0.0.0.0:${MCP_PORT:-8790}/sse`
+- Health: `http://0.0.0.0:${MCP_PORT:-8790}/health`
+- Set `MCP_PORT` to change the port.
+- Set `MCP_TOKEN` or `settings.mcp_server_token` to require `Authorization: Bearer <token>`.
+- Use `--mcp-stdio-only` for pure stdio mode (local desktop assistants).

@@ -57,6 +57,21 @@ import {
 } from "./src/simulation.js";
 
 async function main() {
+    // MCP server mode: expose Dagowan as an MCP server (stdio + HTTP) and
+    // skip the interactive CLI REPL.
+    if (process.argv.includes("--mcp") || process.argv.includes("--mcp-stdio-only") || process.argv.includes("--mcp-http-only")) {
+        const { startMcpServer } = await import("./src/mcp_server.js");
+        const httpOnly = process.argv.includes("--mcp-http-only");
+        const stdioOnly = process.argv.includes("--mcp-stdio-only");
+        await startMcpServer({
+            http: !stdioOnly,
+            stdio: !httpOnly,
+        });
+        // Keep the process alive (HTTP server / stdin handle do this, but be safe).
+        await new Promise(() => {});
+        return;
+    }
+
     // 1. Load configuration and data
     const settings = loadSettings();
     // Configure the shared Neuromorphic Cognitive Memory singleton from settings

@@ -173,18 +173,18 @@ patchFile("node_modules/@napi-rs/canvas/js-binding.js", "canvas native-binding f
 ]);
 
 // Report
-for (const f of results.applied) console.log(`✅ Patched: ${f}`);
+for (const f of results.applied) console.error(`✅ Patched: ${f}`);
 if (!CHECK_MODE) {
-    for (const f of results.clean) console.log(`↔ Already patched: ${f}`);
+    for (const f of results.clean) console.error(`↔ Already patched: ${f}`);
 }
-for (const f of results.missing) console.log(`⚠️ Skipped (not installed): ${f}`);
-for (const f of results.failed) console.log(`❌ Patch problem: ${f}`);
+for (const f of results.missing) console.error(`⚠️ Skipped (not installed): ${f}`);
+for (const f of results.failed) console.error(`❌ Patch problem: ${f}`);
 if (CHECK_MODE) {
     if (results.failed.length > 0 || results.missing.length > 0) {
-        console.log(`CHECK FAILED: ${results.failed.length} problem(s), ${results.missing.length} missing file(s).`);
+        console.error(`CHECK FAILED: ${results.failed.length} problem(s), ${results.missing.length} missing file(s).`);
         process.exit(1);
     }
-    console.log(`CHECK OK: all ${results.clean.length} patched file(s) up to date.`);
+    console.error(`CHECK OK: all ${results.clean.length} patched file(s) up to date.`);
 } else {
-    console.log("ONNX runtime logging patch completed.");
+    console.error("ONNX runtime logging patch completed.");
 }

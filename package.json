@@ -19,6 +19,7 @@
     "patch:check": "bun run patch_onnx.js --check",
     "start": "bun run patch_onnx.js && bun run index.js",
     "web": "bun run patch_onnx.js && bun run index.js --web",
+    "mcp": "bun run patch_onnx.js && bun run index.js --mcp",
     "dashboard": "bun run patch_onnx.js && bun run index.js --dashboard",
     "babyagi": "bun run babyagi.ts",
     "ask": "bun run src/one_shot.js",
