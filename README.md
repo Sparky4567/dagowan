@@ -861,3 +861,34 @@ Run `bun run mcp` (or `bun run index.js --mcp`) to expose Dagowan as an MCP serv
 - Set `MCP_PORT` to change the port.
 - Set `MCP_TOKEN` or `settings.mcp_server_token` to require `Authorization: Bearer <token>`.
 - Use `--mcp-stdio-only` for pure stdio mode (local desktop assistants).
+
+### Using from a remote / web assistant (e.g. ChatGPT web)
+
+The server above binds to your machine, so a cloud-based assistant can only reach it if you expose it publicly and secure it with a token:
+
+1. Start Dagowan in MCP (HTTP) mode:
+   ```bash
+   MCP_PORT=8790 MCP_TOKEN=some-secret bun run index.js --mcp
+   ```
+2. Expose it to the internet (ChatGPT runs in the cloud, so `localhost` won't work):
+   ```bash
+   cloudflared tunnel --url http://localhost:8790   # or: ngrok http 8790
+   ```
+   You'll get a public `https://...` URL.
+3. Add that URL as an MCP connector in your assistant, pointing at `https://<tunnel>/mcp`, and use the same `MCP_TOKEN` as the bearer token.
+4. The assistant will discover the tools (`tools/list`) and call them (`tools/call`) — e.g. `dagowan_chat` to talk to the assistant.
+
+Caveats:
+- ChatGPT web MCP/connector support depends on your plan/version. If it isn't available, use a desktop MCP client instead.
+- Local desktop clients (Claude Desktop, Cursor, Windsurf, …) don't need a tunnel — use pure stdio mode:
+  ```json
+  {
+    "mcpServers": {
+      "dagowan": {
+        "command": "bun",
+        "args": ["run", "/path/to/dagowan/index.js", "--mcp-stdio-only"]
+      }
+    }
+  }
+  ```
+- In MCP mode only the curated tool set is exposed (`ping`, `dagowan_chat`, `list_sessions`, `get_memories`, `remember`, `list_tasks`, `add_task`, `web_search`, `web_fetch`). The full assistant is reachable through `dagowan_chat` (which runs the normal LLM flow with `@` commands, memory, sessions, tasks, web search, etc.). Other surfaces (Telegram/WhatsApp/voice/web UI) are not started in MCP mode.
