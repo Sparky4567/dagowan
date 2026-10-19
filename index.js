@@ -21,6 +21,9 @@ import {
 import { loadMemories, retrieveMemories, saveMemories } from "./src/memory.js";
 import { retrieveKnowledge } from "./src/knowledge.js";
 import { retrieveChatContextParallel } from "./src/chat_context.js";
+import { summarizeMessages } from "./src/context_budget.js";
+import { buildUserProfileBlock } from "./src/personalization.js";
+import { selectModelForTask } from "./src/model_router.js";
 import { getLearningPipeline } from "./src/learning.js";
 import { formatActiveTasks, TaskReminderManager } from "./src/tasks.js";
 import { AgenticModule } from "./src/agentic.js";
@@ -410,6 +413,11 @@ async function main() {
                 role: "system",
                 content: buildSimulationSystemPrompt(activeCharNow?.name || activeCharIdNow, activeSim),
             });
+        } else {
+            const profileBlock = buildUserProfileBlock(activeCharIdNow);
+            if (profileBlock) {
+                modelMessages.push({ role: "system", content: profileBlock });
+            }
         }
 
         // 2-4. Retrieve memories + knowledge + past sessions in parallel.
@@ -541,6 +549,16 @@ async function main() {
             }
         } catch {}
 
+        // 5c. Conversation summary: compact older turns so long chats don't
+        // overflow the context window while keeping recent turns verbatim.
+        if (!activeSim && Array.isArray(context.messages) && context.messages.length > settings.mem_limit * 2) {
+            const older = context.messages.slice(0, -settings.mem_limit * 2);
+            const summary = summarizeMessages(older);
+            if (summary) {
+                modelMessages.push({ role: "system", content: `[Conversation summary (older turns)]:\n${summary}` });
+            }
+        }
+
         // 6. Append recent conversation history: simulation archive while
         // active (isolated), otherwise current session.
         // NOTE: context.messages already contains the current user turn in
@@ -572,12 +590,19 @@ async function main() {
             };
         }
 
+        const selectedModel = selectModelForTask(context.settings, queryText, {
+            needleEnabled: Boolean(context.settings.needle_enabled),
+            needleHandled: false,
+        });
+        if (selectedModel && selectedModel !== context.settings.model) {
+            console.log(`\n🧭 [model router] ${context.settings.model} → ${selectedModel}\n`);
+        }
         process.stdout.write("\nAssistant: ");
         let assistantReply = "";
 
         try {
             const res = await unifiedChat({
-                modelName: context.settings.model,
+                modelName: selectedModel || context.settings.model,
                 messages: modelMessages,
                 stream: true,
                 settings: context.settings,

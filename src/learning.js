@@ -281,46 +281,59 @@ ${assistantResponse}`;
             const parsed = safeParseLlmJson(content);
             if (!parsed) return result;
 
+            const VALID_MEMORY_TYPES = new Set(["fact", "preference", "goal", "project", "concept", "relationship", "instruction", "correction", "observation"]);
+            const clamp01 = (v, fb) => (typeof v === "number" && Number.isFinite(v)) ? Math.max(0, Math.min(1, v)) : fb;
+
             // Process extracted memories
             if (Array.isArray(parsed.memories)) {
                 for (const item of parsed.memories) {
-                    if (item && typeof item.content === "string" && item.content.length > 5) {
-                        const conf = typeof item.confidence === "number" ? item.confidence : 0.8;
-                        if (conf >= 0.6) {
-                            const mem = this.memoryStore.addMemory({
-                                type: item.type || "fact",
-                                content: item.content.trim(),
-                                source: "llm_extraction",
-                                confidence: conf,
-                                importance: typeof item.importance === "number" ? item.importance : 0.6,
-                                tags: Array.isArray(item.tags) ? item.tags : [],
-                                language: normalizeLanguageCode(item.language || item.lang) || turnLang || undefined,
-                            }, scope);
-                            result.memoriesCreated++;
-                            result.details.push(`LLM memory extracted: [${mem.type}] ${mem.content}`);
-                        }
-                    }
+                    if (!item || typeof item.content !== "string") continue;
+                    const content = item.content.trim();
+                    if (content.length < 5 || content.length > 500) continue;
+                    const type = VALID_MEMORY_TYPES.has(item.type) ? item.type : "fact";
+                    const conf = clamp01(item.confidence, 0.8);
+                    if (conf < 0.6) continue;
+                    const importance = clamp01(item.importance, 0.6);
+                    // Dedup: skip if an equivalent active memory already exists.
+                    try {
+                        const dup = this.memoryStore.findSimilarActive(content, type, scope);
+                        if (dup && dup.exactMatch) continue;
+                    } catch {}
+                    const mem = this.memoryStore.addMemory({
+                        type,
+                        content,
+                        source: "llm_extraction",
+                        confidence: conf,
+                        importance,
+                        tags: Array.isArray(item.tags) ? item.tags.slice(0, 8) : [],
+                        language: normalizeLanguageCode(item.language || item.lang) || turnLang || undefined,
+                    }, scope);
+                    result.memoriesCreated++;
+                    result.details.push(`LLM memory extracted: [${mem.type}] ${mem.content}`);
                 }
             }
 
+            const VALID_KNOWLEDGE_CATEGORIES = new Set(["programming", "science", "technology", "projects", "concept", "definition"]);
             // Process extracted knowledge items
             if (Array.isArray(parsed.knowledge)) {
                 for (const item of parsed.knowledge) {
-                    if (item && typeof item.title === "string" && typeof item.content === "string" && item.title.length > 2) {
-                        const conf = typeof item.confidence === "number" ? item.confidence : 0.8;
-                        if (conf >= 0.65) {
-                            const kn = this.knowledgeStore.addKnowledge({
-                                title: item.title.trim(),
-                                content: item.content.trim(),
-                                category: item.category || "concept",
-                                sourceType: "user",
-                                confidence: conf,
-                                changeReason: "Extracted from conversation turn",
-                            });
-                            result.knowledgeCreated++;
-                            result.details.push(`Knowledge added: ${kn.title}`);
-                        }
-                    }
+                    if (!item || typeof item.title !== "string" || typeof item.content !== "string") continue;
+                    const title = item.title.trim();
+                    const content = item.content.trim();
+                    if (title.length < 2 || title.length > 120 || content.length < 5 || content.length > 1000) continue;
+                    const conf = clamp01(item.confidence, 0.8);
+                    if (conf < 0.65) continue;
+                    const category = VALID_KNOWLEDGE_CATEGORIES.has(item.category) ? item.category : "concept";
+                    const kn = this.knowledgeStore.addKnowledge({
+                        title,
+                        content,
+                        category,
+                        sourceType: "user",
+                        confidence: conf,
+                        changeReason: "Extracted from conversation turn",
+                    });
+                    result.knowledgeCreated++;
+                    result.details.push(`Knowledge added: ${kn.title}`);
                 }
             }
 

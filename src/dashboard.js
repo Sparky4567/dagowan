@@ -525,6 +525,11 @@ export class DashboardServer {
         const modelMessages = [];
         const systemPromptText = composeSystemTemplate(activeChar);
         if (systemPromptText) modelMessages.push({ role: "system", content: systemPromptText });
+        try {
+            const { buildUserProfileBlock } = await import("./personalization.js");
+            const profileBlock = buildUserProfileBlock(activeCharId);
+            if (profileBlock) modelMessages.push({ role: "system", content: profileBlock });
+        } catch {}
         for (const block of simBlocks.slice(0, simActive ? 1 : 0)) {
             modelMessages.push({ role: "system", content: block });
         }
@@ -590,7 +595,15 @@ export class DashboardServer {
         } catch {}
 
         const historySource = simActive && simHistoryOverride ? simHistoryOverride : sessionMessages;
-        const historyWindow = historySource.slice(-(this.settings.mem_limit || 10) * 2);
+        const historyLimit = (this.settings.mem_limit || 10) * 2;
+        if (!simActive && Array.isArray(historySource) && historySource.length > historyLimit) {
+            try {
+                const { summarizeMessages } = await import("./context_budget.js");
+                const summary = summarizeMessages(historySource.slice(0, -historyLimit));
+                if (summary) modelMessages.push({ role: "system", content: `[Conversation summary (older turns)]:\n${summary}` });
+            } catch {}
+        }
+        const historyWindow = historySource.slice(-historyLimit);
         for (const h of historyWindow) {
             if (h.role === "user" || h.role === "assistant") modelMessages.push({ role: h.role, content: h.content });
         }
@@ -598,8 +611,13 @@ export class DashboardServer {
 
         const { Ollama } = await import("ollama");
         const ollamaClient = new Ollama({ host: this.settings.server_url });
+        let selectedModel = this.settings.model;
+        try {
+            const { selectModelForTask } = await import("./model_router.js");
+            selectedModel = selectModelForTask(this.settings, text, { needleEnabled: Boolean(this.settings.needle_enabled) });
+        } catch {}
         const llmRes = await this.services.unifiedChat({
-            modelName: this.settings.model,
+            modelName: selectedModel,
             messages: modelMessages,
             stream: false,
             settings: this.settings,

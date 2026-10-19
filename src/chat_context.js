@@ -6,7 +6,7 @@
  * independent sources (memories / knowledge / past sessions) resolve
  * concurrently via Promise.all instead of sequentially.
  */
-import { getMemoryStore } from "./memory.js";
+import { getMemoryStore, applyMMR } from "./memory.js";
 import { KnowledgeStore, tokenize as knowledgeTokenize } from "./knowledge.js";
 import { scoreSessionMessagesScored } from "./utils/parallel_retrieval.js";
 import { searchKnowledgeScored } from "./utils/parallel_retrieval.js";
@@ -89,7 +89,8 @@ export async function retrieveChatContextParallel(queryText, {
                 if (queryTokens.length === 0) return [];
                 const scored = await searchKnowledgeScored(all, queryTokens, q.toLowerCase().trim(), workerOptions);
                 scored.sort((a, b) => b.score - a.score);
-                return scored.slice(0, knowledgeLimit);
+                const mmrRanked = applyMMR(scored, knowledgeLimit);
+                return mmrRanked;
             } catch {
                 const { retrieveKnowledge } = await import("./knowledge.js");
                 return retrieveKnowledge(q, knowledgeLimit);
@@ -119,7 +120,8 @@ export async function retrieveChatContextParallel(queryText, {
                 }
                 const scored = await scoreSessionMessagesScored(flat, queryWords, workerOptions);
                 scored.sort((a, b) => b.score - a.score || String(b.updated_at).localeCompare(String(a.updated_at)));
-                return scored.slice(0, sessionLimit).map(({ session_title, character_id, role, content }) => ({
+                const mmrRanked = applyMMR(scored, sessionLimit);
+                return mmrRanked.map(({ session_title, character_id, role, content }) => ({
                     session_title, character_id, role, content,
                 }));
             } catch {

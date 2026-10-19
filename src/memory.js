@@ -39,6 +39,52 @@ function tokenizeUncached(text) {
 // repeated queries (same chat turn re-scored often) cheap without leaking.
 export const tokenize = memoize(tokenizeUncached, { maxSize: 2000 });
 
+// Lightweight character-trigram similarity — a dependency-free "semantic"
+// signal that complements TF-IDF for paraphrases and partial matches.
+function trigramSet(text) {
+    const s = `  ${String(text || "").toLowerCase().replace(/[^\\p{L}\\p{N}]/gu, " ")}  `;
+    const set = new Set();
+    for (let i = 0; i < s.length - 2; i++) set.add(s.slice(i, i + 3));
+    return set;
+}
+
+export function trigramSimilarity(a, b) {
+    const A = trigramSet(a);
+    const B = trigramSet(b);
+    if (A.size === 0 || B.size === 0) return 0;
+    let inter = 0;
+    for (const t of A) if (B.has(t)) inter++;
+    const union = A.size + B.size - inter;
+    return union > 0 ? inter / union : 0;
+}
+
+// Maximal Marginal Relevance: keep relevance high while penalising redundancy.
+export function applyMMR(items, limit = 10, lambda = 0.7) {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    if (items.length <= limit) return items.slice();
+    const remaining = items.slice();
+    const selected = [remaining.shift()];
+    while (selected.length < limit && remaining.length > 0) {
+        let bestIdx = 0;
+        let bestVal = -Infinity;
+        for (let i = 0; i < remaining.length; i++) {
+            const cand = remaining[i];
+            const relevance = Number(cand?.activation ?? cand?.score ?? 0);
+            let maxSim = 0;
+            for (const sel of selected) {
+                maxSim = Math.max(maxSim, trigramSimilarity(
+                    cand?.memory?.content || "",
+                    sel?.memory?.content || ""
+                ));
+            }
+            const mmr = lambda * relevance - (1 - lambda) * maxSim * Math.max(relevance, 0.01);
+            if (mmr > bestVal) { bestVal = mmr; bestIdx = i; }
+        }
+        selected.push(remaining.splice(bestIdx, 1)[0]);
+    }
+    return selected;
+}
+
 /**
  * Per-character memory scoping.
  *
@@ -792,12 +838,21 @@ export class MemoryRetriever {
                         tfIdfScore += idf;
                     }
                 }
-                if (matchedTokens.length > 0) {
+                const semanticScore = trigramSimilarity(query, mem.content + " " + (mem.tags || []).join(" "));
+                if (matchedTokens.length > 0 || semanticScore >= 0.35) {
                     const importanceBoost = 1 + (mem.importance || 0.5) * 0.5;
                     const confidenceBoost = mem.confidence || 1.0;
                     const typeBoost = mem.type === "correction" ? 1.5 : (mem.type === "project" ? 1.2 : (mem.type === "preference" ? 1.1 : 1.0));
-                    const finalScore = tfIdfScore * importanceBoost * confidenceBoost * typeBoost * boost;
-                    out.push({ memory: mem, score: finalScore, matchedTokens, viaBridge, queryLanguage: activeLang || null });
+                    // Recency boost: recently used/created memories surface higher.
+                    const lastTouch = mem.lastUsedAt || mem.updatedAt || mem.createdAt;
+                    let recencyBoost = 1.0;
+                    if (lastTouch) {
+                        const ageDays = Math.max(0, (Date.now() - new Date(lastTouch).getTime()) / 86400000);
+                        recencyBoost = 1 + 0.25 * Math.exp(-ageDays / 14);
+                    }
+                    const finalScore = (tfIdfScore * importanceBoost * confidenceBoost * typeBoost * boost * recencyBoost)
+                        + 0.3 * semanticScore * (mem.importance || 0.5);
+                    out.push({ memory: mem, score: finalScore, matchedTokens, viaBridge, queryLanguage: activeLang || null, semanticScore });
                 }
             }
             return out;
@@ -841,7 +896,14 @@ export class MemoryRetriever {
             const ranked = neuro.isEnabled()
                 ? neuro.applyScoring(scoredList, limit, now)
                 : scoredList.sort((a, b) => b.score - a.score);
-            return ranked.slice(0, limit);
+            const mmrRanked = applyMMR(ranked, limit);
+            // Touch spikes for the MMR-selected set (neuro scoring already
+            // spiked its own top set; keep behaviour additive).
+            try {
+                const ids = mmrRanked.map((r) => r?.memory?.id).filter(Boolean);
+                if (ids.length && neuro.isEnabled()) neuro.recordSpikes(ids, now);
+            } catch {}
+            return mmrRanked;
         }
 
         // Fallback: nothing matched in-language nor via bridge — return recent
@@ -899,7 +961,8 @@ export class MemoryRetriever {
                 const scored = await searchMemoriesScored(activeMemories, queryTokens, options.workerOptions || {});
                 if (scored.length > 0) {
                     scored.sort((a, b) => b.score - a.score);
-                    return scored.slice(0, limit);
+                    const mmrRanked = applyMMR(scored, limit);
+                    return mmrRanked;
                 }
             } catch {}
         }

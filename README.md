@@ -183,6 +183,18 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
 
 ---
 
+## 🧠 Smarter by Default (new)
+
+Recent improvements to make the assistant noticeably smarter without changing providers:
+
+- **Hybrid retrieval + MMR diversity** (`src/memory.js`, `src/chat_context.js`): trigram semantic similarity, recency/importance weighting, and maximal-marginal-relevance dedup across memories, knowledge, and past sessions.
+- **Stricter learning extraction** (`src/learning.js`): schema validation, confidence/importance clamping, and dedup/conflict handling for LLM-extracted memories and knowledge.
+- **Context budgeting + summaries** (`src/context_budget.js`): compact summaries of older turns keep long conversations inside the context window.
+- **Needle-aware model routing** (`src/model_router.js`): per-turn task classification (chat/coding/reasoning/factual/creative/local action) to pick a better model without changing the shared default.
+- **Personalization profile** (`src/personalization.js`): durable preferences, instructions, goals, and corrections are injected as a stable user-profile block.
+
+---
+
 ## 💻 Cross-Platform Installation & Setup
 
 The repository includes universal self-healing installation scripts and runtime patches (`patch_onnx.js`) designed to run on the **majority of devices, shells, and operating systems out of the box** (Full support for **Zsh** and **Bash** on macOS, Ubuntu, Debian, Arch Linux, Fedora, Android Termux / PRoot-Distro, VPS, and Cloud VMs).
