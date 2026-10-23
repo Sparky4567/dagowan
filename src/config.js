@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
     ollama_ephemeral_timeout_ms: 180000,
     system_template: "You are a helpful assistant.",
     mem_limit: 10,
+    context_budget_tokens: 8192,
     active_character: "main",
     active_workspace: "default",
     whatsapp_enabled: false,

@@ -190,6 +190,7 @@ Recent improvements to make the assistant noticeably smarter without changing pr
 - **Hybrid retrieval + MMR diversity** (`src/memory.js`, `src/chat_context.js`): trigram semantic similarity, recency/importance weighting, and maximal-marginal-relevance dedup across memories, knowledge, and past sessions.
 - **Stricter learning extraction** (`src/learning.js`): schema validation, confidence/importance clamping, and dedup/conflict handling for LLM-extracted memories and knowledge.
 - **Context budgeting + summaries** (`src/context_budget.js`): compact summaries of older turns keep long conversations inside the context window.
+- **Clever chat-load sorting** (`src/context_budget.js`, `src/nsga.js`): deduplicates repeated turns, prioritises high-value/recent context via stable priority sort, and applies non-dominated (NSGA-II) multi-objective sorting to trim prompts to a token budget before each API call — reducing repeated processing of information the model has already seen.
 - **Needle-aware model routing** (`src/model_router.js`): per-turn task classification (chat/coding/reasoning/factual/creative/local action) to pick a better model without changing the shared default.
 - **Personalization profile** (`src/personalization.js`): durable preferences, instructions, goals, and corrections are injected as a stable user-profile block.
 

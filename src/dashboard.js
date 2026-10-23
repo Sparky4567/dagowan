@@ -616,9 +616,14 @@ export class DashboardServer {
             const { selectModelForTask } = await import("./model_router.js");
             selectedModel = selectModelForTask(this.settings, text, { needleEnabled: Boolean(this.settings.needle_enabled) });
         } catch {}
+        let budgetedMessages = modelMessages;
+        try {
+            const { trimMessagesToBudget } = await import("./context_budget.js");
+            budgetedMessages = trimMessagesToBudget(modelMessages, this.settings?.context_budget_tokens || 8192);
+        } catch {}
         const llmRes = await this.services.unifiedChat({
             modelName: selectedModel,
-            messages: modelMessages,
+            messages: budgetedMessages,
             stream: false,
             settings: this.settings,
             ollamaClient,

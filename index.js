@@ -21,7 +21,7 @@ import {
 import { loadMemories, retrieveMemories, saveMemories } from "./src/memory.js";
 import { retrieveKnowledge } from "./src/knowledge.js";
 import { retrieveChatContextParallel } from "./src/chat_context.js";
-import { summarizeMessages } from "./src/context_budget.js";
+import { summarizeMessages, trimMessagesToBudget } from "./src/context_budget.js";
 import { buildUserProfileBlock } from "./src/personalization.js";
 import { selectModelForTask } from "./src/model_router.js";
 import { getLearningPipeline } from "./src/learning.js";
@@ -600,10 +600,16 @@ async function main() {
         process.stdout.write("\nAssistant: ");
         let assistantReply = "";
 
+        // Reduce repeated API load: collapse duplicate context and fit the
+        // assembled prompt inside the configured context budget before sending.
+        const budgetedMessages = trimMessagesToBudget(
+            modelMessages,
+            context.settings?.context_budget_tokens || 8192
+        );
         try {
             const res = await unifiedChat({
                 modelName: selectedModel || context.settings.model,
-                messages: modelMessages,
+                messages: budgetedMessages,
                 stream: true,
                 settings: context.settings,
                 ollamaClient: ollamaClient,
