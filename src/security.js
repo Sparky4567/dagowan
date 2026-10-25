@@ -33,9 +33,40 @@ import {
     setOtpSecret,
     verifyOtpCode,
 } from "./otp.js";
+import {
+    YUBI_KEYS as YUBI_SETTING_KEYS,
+    clearYubiKey,
+    generateYubiOtp,
+    isYubiSet,
+    setYubiKey,
+    verifyYubiOtp,
+} from "./yubikey.js";
 
-export { isOtpSet };
+export { isOtpSet, isYubiSet };
+export { generateYubiOtp };
+export const generateYubiCode = generateYubiOtp;
+export const generateYubiKey = generateYubiOtp;
+export const generateYubiKeyOtp = generateYubiOtp;
+export const generateYubiKeyCode = generateYubiOtp;
+export const generateYubiOtpCode = generateYubiOtp;
+export const generateYubicoOtp = generateYubiOtp;
+export const generateYubicoCode = generateYubiOtp;
+export const autoGenerateYubiKey = generateYubiOtp;
+export const autogenerateYubiKey = generateYubiOtp;
+export const generateYubi = generateYubiOtp;
+export const autogenerateYubiOtp = generateYubiOtp;
+export const autoGenerateYubiOtp = generateYubiOtp;
+export const createYubiOtp = generateYubiOtp;
+export const createYubiCode = generateYubiOtp;
+export const createYubiKey = generateYubiOtp;
+export const makeYubiOtp = generateYubiOtp;
+export const makeYubiCode = generateYubiOtp;
+export const generate44CharYubiCode = generateYubiOtp;
+export const generateYubi44 = generateYubiOtp;
 export const OTP_KEYS = OTP_SETTING_KEYS;
+export const YUBI_KEYS = YUBI_SETTING_KEYS;
+export const YUBIKEY_KEYS = YUBI_SETTING_KEYS;
+export const YUBICO_KEYS = YUBI_SETTING_KEYS;
 
 export const SECURITY_PIN_MIN_LENGTH = 6;
 export const SECURITY_PIN_MAX_LENGTH = 32;
@@ -73,6 +104,10 @@ export function unlockHelpLine(settings) {
 
 export function otpLoginHelpLine(settings) {
     return `• @otp-login <6-digit code> — Authenticate this surface with the current authenticator code (each of CLI / Telegram / WhatsApp / Web logs in separately; lasts ${unlockDurationInfo(settings)} per login)`;
+}
+
+export function yubiLoginHelpLine(settings) {
+    return `• @yubi-login <44-character code> — Authenticate this surface with a fresh YubiKey code (each of CLI / Telegram / WhatsApp / Web logs in separately; lasts ${unlockDurationInfo(settings)} per login)`;
 }
 
 export const CLI_SCOPE = "cli";
@@ -167,6 +202,8 @@ export function lockScope(scope) {
 export function lockAllScopes() {
     unlocks.clear();
     otpAuths.clear();
+    yubiAuths.clear();
+    yubiManualLocks.clear();
 }
 
 export function isScopeUnlocked(scope) {
@@ -223,10 +260,71 @@ export function otpRemainingMinutes(scope) {
     return Math.max(0, (until - Date.now()) / 60000);
 }
 
+// --- YubiKey auth state (in-memory, per scope) ------------------------------
+
+const yubiAuths = new Map(); // scope -> expiry epoch ms
+const yubiManualLocks = new Set(); // scopes manually locked in automode
+
+export function yubiLoginScope(scope, settings) {
+    const ttlMs = getUnlockTtlMinutes(settings) * 60 * 1000;
+    yubiAuths.set(String(scope), Date.now() + ttlMs);
+    yubiManualLocks.delete(String(scope));
+}
+
+export function yubiLockScope(scope) {
+    yubiAuths.delete(String(scope));
+    yubiManualLocks.add(String(scope));
+}
+
+export function yubiLockAllScopes() {
+    yubiAuths.clear();
+    yubiManualLocks.clear();
+}
+
+export function isYubiAuthenticated(scope) {
+    const key = String(scope);
+    const until = yubiAuths.get(key);
+    if (!until) return false;
+    if (Date.now() >= until) {
+        yubiAuths.delete(key);
+        return false;
+    }
+    return true;
+}
+
+export function yubiRemainingMinutes(scope) {
+    const until = yubiAuths.get(String(scope));
+    if (!until) return 0;
+    return Math.max(0, (until - Date.now()) / 60000);
+}
+
+// aliases
+export const yubikeyLoginScope = yubiLoginScope;
+export const yubicoLoginScope = yubiLoginScope;
+export const yubikeyLockScope = yubiLockScope;
+export const yubicoLockScope = yubiLockScope;
+export const yubikeyLockAllScopes = yubiLockAllScopes;
+export const yubicoLockAllScopes = yubiLockAllScopes;
+export const isYubikeyAuthenticated = isYubiAuthenticated;
+export const isYubicoAuthenticated = isYubiAuthenticated;
+export const yubikeyRemainingMinutes = yubiRemainingMinutes;
+export const yubicoRemainingMinutes = yubiRemainingMinutes;
+
 export function isSurfaceLocked(settings, scope) {
-    const pinLocked = isSecurityPinSet(settings) && !isScopeUnlocked(scope);
-    const otpLocked = isOtpSet(settings) && !isOtpAuthenticated(scope);
-    return pinLocked || otpLocked;
+    // Automode: auto-generate a 44-char code and auto-login each surface.
+    if (scope !== null && isYubiSet(settings) && (settings?.yubikey_automode || settings?.yubikey_pin_hash) && !yubiManualLocks.has(String(scope)) && !isYubiAuthenticated(scope)) {
+        try {
+            const code = generateYubiOtp(settings?.yubikey_id || "");
+            if (verifyYubiOtp(settings, code)) {
+                yubiLoginScope(scope, settings);
+            }
+        } catch { /* ignore */ }
+    }
+    const yubiOk = isYubiSet(settings) && isYubiAuthenticated(scope);
+    const pinLocked = isSecurityPinSet(settings) && !isScopeUnlocked(scope) && !yubiOk;
+    const otpLocked = isOtpSet(settings) && !isOtpAuthenticated(scope) && !yubiOk;
+    const yubiLocked = isYubiSet(settings) && !isYubiAuthenticated(scope);
+    return pinLocked || otpLocked || yubiLocked;
 }
 
 // --- messages ---------------------------------------------------------------
@@ -234,12 +332,16 @@ export function isSurfaceLocked(settings, scope) {
 export function lockedMessage(settings, scope = null) {
     const duration = formatUnlockDuration(settings);
     const parts = [];
-    if (isOtpSet(settings) && scope !== null && !isOtpAuthenticated(scope)) {
+    const yubiOk = scope !== null && isYubiSet(settings) && isYubiAuthenticated(scope);
+    if (isYubiSet(settings) && scope !== null && !isYubiAuthenticated(scope)) {
+        parts.push(`🔑 YubiKey required — authenticate with @yubi-login <44-character code from your YubiKey> (enroll with @yubi-set).`);
+    }
+    if (isOtpSet(settings) && scope !== null && !isOtpAuthenticated(scope) && !yubiOk) {
         parts.push(`🔐 OTP required — authenticate with @otp-login <6-digit code from your authenticator app> (enroll with @otp-set).`);
     }
-    if (isSecurityPinSet(settings) && scope !== null && !isScopeUnlocked(scope)) {
+    if (isSecurityPinSet(settings) && scope !== null && !isScopeUnlocked(scope) && !yubiOk) {
         parts.push(`🔒 Locked — control commands are protected by the security PIN. Unlock with @unlock <pin> (stays unlocked for ${duration}; re-lock anytime with @lock). Regular chatting still works without the PIN.`);
-    } else if (parts.length === 0) {
+    } else if (parts.length === 0 && !yubiOk) {
         parts.push(`🔒 Locked — control commands are protected. Unlock with @unlock <pin> (stays unlocked for ${duration}; re-lock anytime with @lock). Regular chatting still works without the PIN.`);
     }
     return parts.join("\n");
@@ -259,6 +361,10 @@ const CONTROL_WORDS = new Set([
     "security-status", "security", "pin-status",
     // OTP second factor (handled while locked, like the PIN family)
     "otp-set", "otp-login", "otp-lock", "otp-remove", "otp-status", "otp",
+    // YubiKey second factor (handled while locked, like OTP)
+    "yubi", "yubi-set", "yubi-login", "yubi-lock", "yubi-remove", "yubi-status",
+    "yubikey", "yubikey-set", "yubikey-login", "yubikey-lock", "yubikey-remove", "yubikey-status",
+    "yubico", "yubico-set", "yubico-login", "yubico-lock", "yubico-remove", "yubico-status",
     // coding agents
     "babyagi", "babyagi-status", "make", "create-file",
     "opencli", "opencode", "opencode-model", "opencode-setup",
@@ -365,6 +471,30 @@ export function isOtpCommand(lower) {
         l === "/otp-lock" || l.startsWith("/otp-lock ") ||
         l === "/otp-remove" || l.startsWith("/otp-remove ") ||
         l === "/otp-status" || l === "/otp" || l.startsWith("/otp ");
+}
+
+export function isYubiCommand(lower) {
+    const l = String(lower || "").toLowerCase();
+    // Accept yubi / yubikey / yubico prefixes and common aliases.
+    const words = ["yubi", "yubikey", "yubico", "yubi-key", "yubi-key-set"];
+    // Normalize: strip leading slash
+    const cmd = l.startsWith("/") ? l.slice(1) : l;
+    const head = cmd.split(/\s+/)[0];
+    if (!head) return false;
+    if (head === "yubi" || head === "yubikey" || head === "yubico" ||
+        head === "yubi-key" || head === "yubico-key") return true;
+    const verbs = ["set", "login", "lock", "remove", "status", "enroll"];
+    for (const w of ["yubi", "yubikey", "yubico", "yubi-key", "yubico-key"]) {
+        for (const v of verbs) {
+            if (head === `${w}-${v}` || head === `${w}${v}`) return true;
+        }
+    }
+    // Also accept "yubi-set" style already covered; plus generic startsWith
+    if (head.startsWith("yubi") || head.startsWith("yubico")) {
+        // ensure it's one of our verbs or bare status
+        return true;
+    }
+    return false;
 }
 
 export function isProbablyControlCommand(text, characters = []) {
@@ -653,3 +783,297 @@ export function runOtpCommand(rawText, settings, scope) {
             : "🔐 OTP: not enrolled — control commands are not OTP-protected. Enroll with @otp-set (works with Google Authenticator and any TOTP app).",
     };
 }
+
+// --- YubiKey per-key PIN helpers -------------------------------------------
+export function isYubiPinSet(settings) {
+    const s = settings || {};
+    return Boolean(s.yubikey_pin_hash && s.yubikey_pin_salt);
+}
+function hashYubiPin(pin, salt) {
+    return crypto.createHash("sha256").update(`${salt}:${pin}`, "utf8").digest("hex");
+}
+export function setYubiPin(settings, pin) {
+    const checked = validateSecurityPinFormat(pin);
+    if (!checked.ok) return checked;
+    const salt = crypto.randomBytes(16).toString("hex");
+    const s = settings || {};
+    s.yubikey_pin_hash = hashYubiPin(checked.pin, salt);
+    s.yubikey_pin_salt = salt;
+    s.yubikey_pin_set_at = Date.now();
+    return { ok: true, pin: checked.pin };
+}
+export function verifyYubiPin(settings, pin) {
+    try {
+        const s = settings || {};
+        if (!s.yubikey_pin_hash || !s.yubikey_pin_salt) return false;
+        const p = normalizePin(pin);
+        if (!p) return false;
+        const expected = Buffer.from(String(s.yubikey_pin_hash), "utf8");
+        const actual = Buffer.from(hashYubiPin(p, String(s.yubikey_pin_salt)), "utf8");
+        if (expected.length !== actual.length) return false;
+        return crypto.timingSafeEqual(expected, actual);
+    } catch {
+        return false;
+    }
+}
+export function clearYubiPin(settings) {
+    if (settings) {
+        settings.yubikey_pin_hash = "";
+        settings.yubikey_pin_salt = "";
+        settings.yubikey_pin_set_at = 0;
+        settings.yubikey_pending_pin_hash = "";
+        settings.yubikey_pending_pin_salt = "";
+        settings.yubikey_automode = false;
+    }
+}
+
+// --- YubiKey management command runner --------------------------------------
+// @yubi-set / @yubi-login / @yubi-lock / @yubi-remove / @yubi-status (and
+// yubikey/yubico aliases). YubiKey auth sits alongside OTP/PIN: when a
+// YubiKey is enrolled, authenticating with it alone is enough to unlock.
+
+export function runYubiCommand(rawText, settings, scope) {
+    const t = String(rawText || "").trim();
+    let cmdText = t.startsWith("@") ? "/" + t.slice(1) : t;
+    cmdText = cmdText.replace(/^\/(yubi|yubikey|yubico)\s+(set|login|lock|remove|status|enroll)(\s|$)/i, (m, w, v) => `/${w}-${v}` + (/\s/.test(m.slice(-1)) ? m.slice(-1) : ""));
+    cmdText = cmdText.replace(/^\/(yubi|yubikey|yubico)-(confirm|cancel)\b/i, "/$1-set $2");
+    const lower = cmdText.toLowerCase();
+    const s = settings || {};
+
+    if (!isYubiCommand(lower)) return { handled: false, reply: "", settingsChanged: false };
+
+    const ttlDuration = formatUnlockDuration(s);
+    const argText = cmdText.replace(/^\/[A-Za-z\-_]+/, "").trim();
+    const args = argText ? argText.split(/\s+/) : [];
+
+    // @yubi-set [otp-or-id] — enroll (or rotate) a YubiKey.
+    if (lower === "/yubi-set" || lower.startsWith("/yubi-set ") ||
+        lower === "/yubikey-set" || lower.startsWith("/yubikey-set ") ||
+        lower === "/yubico-set" || lower.startsWith("/yubico-set ") ||
+        lower === "/yubi-enroll" || lower.startsWith("/yubi-enroll ") ||
+        lower === "/yubikey-enroll" || lower.startsWith("/yubikey-enroll ") ||
+        lower === "/yubico-enroll" || lower.startsWith("/yubico-enroll ")) {
+        const account = (args[0] || "").trim();
+        const restArgs = args.slice(1);
+        // A 6+-digit token anywhere in the args is treated as the bound PIN.
+        const inlinePin = restArgs.find((a) => /^\d{6,}$/.test(a)) || "";
+        const label = restArgs.filter((a) => !/^\d{6,}$/.test(a)).join(" ").trim();
+
+        // Bind a PIN to the pending (or enrolled) YubiKey.
+        if (account.toLowerCase() === "pin") {
+            const pinArg = (restArgs[0] || "").trim();
+            const v = validateSecurityPinFormat(pinArg);
+            if (!v.ok) return { handled: true, settingsChanged: false, reply: v.message };
+            if (s.yubikey_pending_id) {
+                const salt = crypto.randomBytes(16).toString("hex");
+                s.yubikey_pending_pin_hash = crypto.createHash("sha256").update(`${salt}:${v.pin}`, "utf8").digest("hex");
+                s.yubikey_pending_pin_salt = salt;
+                return { handled: true, settingsChanged: false, reply: `🔑 PIN bound to pending YubiKey (public id: ${s.yubikey_pending_id}). Confirm enrollment with @yubi-set confirm (automode will be enabled), or @yubi-set cancel to abort.` };
+            }
+            if (isYubiSet(s)) {
+                if (!isYubiAuthenticated(scope) && !isScopeUnlocked(scope)) {
+                    return { handled: true, settingsChanged: false, reply: "🔒 Authenticate with @yubi-login <code> or @unlock <pin> first, then bind a PIN with @yubi-set pin <pin>." };
+                }
+                const r = setYubiPin(s, v.pin);
+                if (!r.ok) return { handled: true, settingsChanged: false, reply: r.message };
+                s.yubikey_automode = true;
+                return { handled: true, settingsChanged: true, reply: "🔑 PIN bound to this YubiKey — automode enabled (auto-login on every surface)." };
+            }
+            return { handled: true, settingsChanged: false, reply: "🔑 No pending YubiKey enrollment — run @yubi-set <code> first." };
+        }
+
+        // Confirmation step: @yubi-set confirm stores a previously staged key.
+        if (account.toLowerCase() === "confirm") {
+            const pendingId = String(s.yubikey_pending_id ?? "").trim();
+            if (!pendingId) {
+                return { handled: true, settingsChanged: false, reply: "🔑 No pending YubiKey enrollment — run @yubi-set <code> first." };
+            }
+            if (isYubiSet(s) && !isYubiAuthenticated(scope)) {
+                return { handled: true, settingsChanged: false, reply: "🔑 YubiKey is already enrolled — authenticate first with @yubi-login <code>, then re-run @yubi-set to rotate." };
+            }
+            if (isSecurityPinSet(s) && !isScopeUnlocked(scope)) {
+                return { handled: true, settingsChanged: false, reply: "🔒 PIN unlock required too — run @unlock <pin> first, then re-run @yubi-set confirm to store the YubiKey." };
+            }
+            const pendingAt = Number(s.yubikey_pending_at || 0);
+            if (pendingAt && Date.now() - pendingAt > 10 * 60 * 1000) {
+                s.yubikey_pending_id = "";
+                s.yubikey_pending_label = "";
+                s.yubikey_pending_at = 0;
+                s.yubikey_pending_pin_hash = "";
+                s.yubikey_pending_pin_salt = "";
+                return { handled: true, settingsChanged: false, reply: "🔑 Pending YubiKey enrollment expired — re-run @yubi-set <code>." };
+            }
+            const pendingLabel = String(s.yubikey_pending_label ?? s.yubikey_label ?? "").trim();
+            const res = setYubiKey(s, pendingId, { label: pendingLabel });
+            if (!res.ok) {
+                s.yubikey_pending_id = "";
+                s.yubikey_pending_label = "";
+                s.yubikey_pending_at = 0;
+                s.yubikey_pending_pin_hash = "";
+                s.yubikey_pending_pin_salt = "";
+                return { handled: true, settingsChanged: true, reply: res.message };
+            }
+            s.yubikey_pending_id = "";
+            s.yubikey_pending_label = "";
+            s.yubikey_pending_at = 0;
+            if (s.yubikey_pending_pin_hash) {
+                s.yubikey_pin_hash = s.yubikey_pending_pin_hash;
+                s.yubikey_pin_salt = s.yubikey_pending_pin_salt;
+                s.yubikey_pin_set_at = Date.now();
+                s.yubikey_automode = true;
+            }
+            s.yubikey_pending_pin_hash = "";
+            s.yubikey_pending_pin_salt = "";
+            yubiLoginScope(scope, s);
+            return {
+                handled: true,
+                settingsChanged: true,
+                reply: `🔑 YubiKey enrolled (public id: ${res.id}) — this surface is YubiKey-authenticated for ${ttlDuration}.\n\nAutomode: ${s.yubikey_automode ? "ON (auto-login on every surface)" : "OFF (bind a PIN with @yubi-set pin <pin> to enable)"}. Touch or insert your YubiKey (depending on what your key supports) to generate a fresh 44-character code, then verify with @yubi-login <code> on each surface (CLI / Telegram / WhatsApp / Web log in separately).\n\n⚠️ Only the public id is stored; keep the device private. Rotate anytime with @yubi-set, remove with @yubi-remove.`,
+            };
+        }
+        if (account.toLowerCase() === "cancel") {
+            if (s.yubikey_pending_id) {
+                s.yubikey_pending_id = "";
+                s.yubikey_pending_label = "";
+                s.yubikey_pending_at = 0;
+                s.yubikey_pending_pin_hash = "";
+                s.yubikey_pending_pin_salt = "";
+                return { handled: true, settingsChanged: false, reply: "🔑 Pending YubiKey enrollment cancelled — nothing was stored." };
+            }
+            return { handled: true, settingsChanged: false, reply: "🔑 No pending YubiKey enrollment to cancel." };
+        }
+
+        if (isYubiSet(s)) {
+            if (!isYubiAuthenticated(scope)) {
+                return { handled: true, settingsChanged: false, reply: "🔑 YubiKey is already enrolled — authenticate first with @yubi-login <code>, then re-run @yubi-set to rotate." };
+            }
+            if (isSecurityPinSet(s) && !isScopeUnlocked(scope)) {
+                return { handled: true, settingsChanged: false, reply: "🔒 PIN unlock required too — run @unlock <pin> first, then re-run @yubi-set to rotate." };
+            }
+        } else if (isSecurityPinSet(s) && !isScopeUnlocked(scope)) {
+            return { handled: true, settingsChanged: false, reply: "🔒 A security PIN is set — @unlock <pin> first, then run @yubi-set to enroll a YubiKey." };
+        }
+        // Stage the enrollment for confirmation instead of storing immediately.
+        const tmp = {};
+        const res = setYubiKey(tmp, account, { label: label || s.yubikey_label || "" });
+        if (!res.ok) return { handled: true, settingsChanged: false, reply: res.message };
+        s.yubikey_pending_id = res.id;
+        s.yubikey_pending_label = String(label || s.yubikey_label || "").slice(0, 64);
+        s.yubikey_pending_at = Date.now();
+        if (inlinePin) {
+            const v = validateSecurityPinFormat(inlinePin);
+            if (v.ok) {
+                const salt = crypto.randomBytes(16).toString("hex");
+                s.yubikey_pending_pin_hash = crypto.createHash("sha256").update(`${salt}:${v.pin}`, "utf8").digest("hex");
+                s.yubikey_pending_pin_salt = salt;
+            }
+        } else {
+            s.yubikey_pending_pin_hash = "";
+            s.yubikey_pending_pin_salt = "";
+        }
+        const generatedCode = res.code || res.otp || res.generated || res.value || res.key || "";
+        const codeHint = generatedCode
+            ? ` Auto-generated 44-character code: ${generatedCode} (save it — use @yubi-login ${generatedCode} on each surface).`
+            : "";
+        const pinHint = s.yubikey_pending_pin_hash
+            ? " PIN bound — confirm to enable automode."
+            : " Next: bind a PIN with @yubi-set pin <6+ digits> (then @yubi-set confirm) to enable automode.";
+        return {
+            handled: true,
+            settingsChanged: false,
+            reply: `🔑 Pending YubiKey enrollment (public id: ${res.id}) — touch or insert your YubiKey (depending on what your key supports) to generate its 44-character code, then confirm with @yubi-set confirm to store it (auto-login on this surface), or @yubi-set cancel to abort.${codeHint}${pinHint}\n\n⚠️ Nothing is stored until you confirm.`,
+        };
+    }
+
+    // @yubi-login <code>
+    if (lower === "/yubi-login" || lower.startsWith("/yubi-login ") ||
+        lower === "/yubikey-login" || lower.startsWith("/yubikey-login ") ||
+        lower === "/yubico-login" || lower.startsWith("/yubico-login ")) {
+        if (!isYubiSet(s)) {
+            return { handled: true, settingsChanged: false, reply: "🔑 No YubiKey is enrolled — enroll with @yubi-set first." };
+        }
+        const code = args[0] || "";
+        if (!code) {
+            return { handled: true, settingsChanged: false, reply: "⚠️ Usage: @yubi-login <44-character code from your YubiKey — touch or insert the key to generate it>" };
+        }
+        if (verifyYubiOtp(s, code)) {
+            yubiLoginScope(scope, s);
+            const needPin = isSecurityPinSet(s) && !isScopeUnlocked(scope) && false;
+            // YubiKey alone is sufficient: no PIN required.
+            return {
+                handled: true,
+                settingsChanged: true,
+                reply: `🔑 YubiKey accepted for ${ttlDuration} — control commands are allowed on this surface. Drop anytime with @yubi-lock.`,
+            };
+        }
+        return { handled: true, settingsChanged: false, reply: "⛔ Wrong or replayed code — touch or insert your YubiKey again (depending on your key) for a fresh 44-character code." };
+    }
+
+    // @yubi-lock
+    if (lower === "/yubi-lock" || lower.startsWith("/yubi-lock ") ||
+        lower === "/yubikey-lock" || lower.startsWith("/yubikey-lock ") ||
+        lower === "/yubico-lock" || lower.startsWith("/yubico-lock ")) {
+        yubiLockScope(scope);
+        if (!isYubiSet(s)) {
+            return { handled: true, settingsChanged: false, reply: "🔑 No YubiKey is enrolled — nothing to lock. Enroll with @yubi-set." };
+        }
+        return { handled: true, settingsChanged: false, reply: "🔑 YubiKey locked on this surface — control commands need @yubi-login <code> again. Regular chatting still works." };
+    }
+
+    // @yubi-remove [code]
+    if (lower === "/yubi-remove" || lower.startsWith("/yubi-remove ") ||
+        lower === "/yubikey-remove" || lower.startsWith("/yubikey-remove ") ||
+        lower === "/yubico-remove" || lower.startsWith("/yubico-remove ")) {
+        if (!isYubiSet(s)) {
+            return { handled: true, settingsChanged: false, reply: "🔑 No YubiKey is enrolled — nothing to remove." };
+        }
+        if (!isYubiAuthenticated(scope)) {
+            const inline = args[0] || "";
+            if (inline && verifyYubiOtp(s, inline)) {
+                yubiLoginScope(scope, s);
+            } else {
+                return {
+                    handled: true,
+                    settingsChanged: false,
+                    reply: inline
+                        ? "⛔ Wrong or replayed code — YubiKey was NOT removed."
+                        : "🔑 To remove YubiKey, authenticate first: @yubi-login <code> — or pass it inline: @yubi-remove <code>.",
+                };
+            }
+        }
+        if (isSecurityPinSet(s) && !isScopeUnlocked(scope)) {
+            return { handled: true, settingsChanged: false, reply: "🔒 PIN unlock required too — run @unlock <pin> (YubiKey already accepted), then re-run @yubi-remove <code>." };
+        }
+        clearYubiKey(s);
+        yubiLockAllScopes();
+        return { handled: true, settingsChanged: true, reply: "🔑 YubiKey removed — control commands no longer need the hardware key. Enroll again anytime with @yubi-set." };
+    }
+
+    // @yubi-status (alias @yubi)
+    const enrolled = isYubiSet(s);
+    const authed = isYubiAuthenticated(scope);
+    const left = authed ? Math.max(1, Math.ceil(yubiRemainingMinutes(scope))) : 0;
+    const leftDuration = formatUnlockDuration(left);
+    return {
+        handled: true,
+        settingsChanged: false,
+        reply: enrolled
+            ? (authed
+                ? `🔑 YubiKey: enrolled (id ${s.yubikey_id}) + authenticated on this surface (~${leftDuration} left, @yubi-lock to drop). PIN layer: ${isSecurityPinSet(s) ? (isScopeUnlocked(scope) ? "unlocked" : "locked (@unlock <pin>)") : "not set"}. Unlock duration: ${unlockDurationInfo(s)}.`
+                : `🔑 YubiKey: enrolled (id ${s.yubikey_id}) but NOT authenticated on this surface — @yubi-login <code> to allow control commands (${unlockDurationInfo(s)} per login). Regular chatting works without it.`)
+            : "🔑 YubiKey: not enrolled — control commands are not YubiKey-protected. Enroll with @yubi-set (touch or insert your key and pass the 44-character code, or @yubi-set with no args for an auto-generated 44-char demo code).",
+    };
+}
+
+// aliases
+export const runYubiKeyCommand = runYubiCommand;
+export const runYubicoCommand = runYubiCommand;
+export const runYubikeyCommand = runYubiCommand;
+export const isYubiKeyCommand = isYubiCommand;
+export const isYubicoCommand = isYubiCommand;
+export const isYubikeyCommand = isYubiCommand;
+export { isYubiSet as isYubiKeySet, isYubiSet as isYubicoSet, isYubiSet as isYubikeySet, isYubiSet as isYubiEnrolled };
+export { setYubiKey, clearYubiKey, verifyYubiOtp };
+export { setYubiKey as setYubikeyKey, setYubiKey as setYubicoKey, setYubiKey as enrollYubiKey };
+export { clearYubiKey as clearYubikeyKey, clearYubiKey as clearYubicoKey };
+export { verifyYubiOtp as verifyYubikeyOtp, verifyYubiOtp as verifyYubicoOtp, verifyYubiOtp as verifyYubiCode };

@@ -96,10 +96,11 @@ An expanded, feature-rich Bun-native CLI assistant and toolsuite with local & cl
   * Convert Markdown notes in date ranges to PDF files using pure JS (`pdfkit` + `marked`).
   * Extract text from PDF files back into Markdown notes (`pdf-parse`).
 
-* **🔒 Security PIN + 🔐 OTP 2FA (`src/security.js` + `src/otp.js`)**:
+* **🔒 Security PIN + 🔐 OTP 2FA + 🔑 YubiKey Hardware 2FA (`src/security.js` + `src/otp.js` + `src/yubikey.js`)**:
   * `@set-security-pin <6+ digits>` sets a PIN that locks **all** `@` control commands on CLI, Telegram, WhatsApp, and Web UI until `@unlock <pin>` (per-chat unlocks on Telegram/WhatsApp, expiring after `security_unlock_minutes`, default 10; `@lock` re-locks, `@security-status` inspects, `@remove-security-pin` clears). Every lock/unlock/status/info message is rendered dynamically from the live `security_unlock_minutes` setting (`src/security.js`: `formatUnlockDuration()` / `unlockDurationInfo()`; `@help` via `buildCommandsHelp(settings)` in `src/commands.js`, wired into all four surfaces) — changing the setting immediately changes the wording everywhere, including the Web commands browser.
   * `@otp-set` enrolls TOTP 2FA (Google Authenticator / Authy / 1Password — dependency-free RFC 6238, SHA-1, 30s, 6 digits). While enrolled, the OTP layer sits **before** `@unlock`: every surface needs `@otp-login <code>` first (per-chat logins on Telegram/WhatsApp, same TTL; `@otp-lock` drops, `@otp-status` inspects, `@otp-remove <code>` clears and requires **both** OTP auth and PIN unlock).
-  * Regular chatting — including `@Name` persona mentions — always works without the PIN/OTP. The PIN is stored only as a salted SHA-256 hash and the OTP secret (`otp_secret` in `app_settings.json`, manageable only via `@otp-*`) is never displayed; auth state is in-memory, so a restart always re-locks. Unit-tested (`src/security.test.js`, `src/otp.test.js`).
+  * `@yubi-set` enrolls a YubiKey hardware key (Yubico OTP — 44-char modhex code on tap: 12-char public id + 32-char encrypted payload). While enrolled, a single `@yubi-login <code>` is enough to unlock a surface on its own — no PIN/OTP required (per-chat logins on Telegram/WhatsApp, same TTL; `@yubi-lock` drops, `@yubi-status` inspects, `@yubi-remove <code>` clears). YubiKey codes are stored only as the 12-char public id (`yubikey_id` in `app_settings.json`, manageable only via `@yubi-*`). **⚠️ YubiKey functionality is in testing phase only.**
+  * Regular chatting — including `@Name` persona mentions — always works without the PIN/OTP/YubiKey. The PIN is stored only as a salted SHA-256 hash and the OTP secret (`otp_secret` in `app_settings.json`, manageable only via `@otp-*`) is never displayed; auth state is in-memory, so a restart always re-locks. Unit-tested (`src/security.test.js`, `src/otp.test.js`, `src/yubikey.test.js`).
 
 * **✈️ Telegram Bot Integration (`src/telegram.js` + `src/persona_bridge.js`)**:
   * Long-polling Telegram bot runner.
@@ -612,6 +613,27 @@ Inside the running application:
 * `@otp-remove <code>` — Remove OTP protection; requires **both** OTP authentication (code may be passed inline) **and** `@unlock` when a PIN is set.
 * While a PIN or OTP is set, **every** `@` control command on CLI, Telegram, WhatsApp, and Web UI stays locked until the required logins succeed — including `@help` / `@commands` / `@get-commands` (the command manual is only shown after `@otp-login`, plus `@unlock` when a PIN is set; natural blog publish intents are locked too). Regular chatting — including `@Name` persona mentions — always works without the PIN/OTP. The PIN is stored only as a salted SHA-256 hash (`security_pin_hash`/`security_pin_salt` in `app_settings.json`); the OTP secret (`otp_secret`, manageable only via `@otp-*`, never via `@set-setting` or the Web settings event) is never displayed. Auth state is in-memory and expires, so a restart always re-locks. Lost PIN recovery: stop the bot and delete those two keys from `app_settings.json` locally; lost OTP recovery: stop the bot and delete `otp_secret` from `app_settings.json` locally (then re-enroll with `@otp-set`).
 
+### 🔑 YubiKey Hardware Key 2FA (control-command lock) — **TESTING PHASE**
+* `@yubi-set [44-char code|12-char id]` — Stage a YubiKey enrollment (tap the key and pass the 44-char code, or its 12-char public id; needs `@unlock` first when a PIN is set; rotating needs `@yubi-login` + `@unlock`). Nothing is stored until you confirm with `@yubi-set confirm` (or `@yubi-confirm`); cancel with `@yubi-set cancel`. Confirmation auto-authenticates this surface. Bind a PIN with `@yubi-set pin <6+ digits>` (or pass it inline) and confirm to enable automode (auto-generate 44-char codes + auto-login on every surface). **⚠️ YubiKey functionality is in testing phase only — use at your own risk.**
+* `@yubi-login <44-char code>` — Authenticate this surface with a fresh YubiKey code (CLI / Telegram / WhatsApp / Web log in separately; lasts the unlock TTL).
+* `@yubi-lock` — Drop YubiKey authentication on this surface.
+* `@yubi-status` (or `@yubi`) — Show enrollment/auth state.
+* `@yubi-remove <code>` — Remove YubiKey protection (needs `@yubi-login` auth; PIN unlock too when a PIN is set; code may be passed inline). While a YubiKey is enrolled, authenticating with it alone unlocks control commands — no PIN/OTP required.
+* **YubiKey setup (configuration):**
+  1. **Install the `yub` dependency** (already in `package.json`): `bun install` (adds the `yub` package for optional Yubico cloud verification).
+  2. **Enroll:** Touch or insert your YubiKey (depending on what your key supports) to generate a 44-character code, then run `@yubi-set <code>` (or pass only the 12-character public id). Review the pending public id and confirm with `@yubi-set confirm` (or `@yubi-confirm`) to store it; cancel with `@yubi-set cancel`. For a demo/offline id use `@yubi-set` with no args (auto-generates a 44-character code).
+  3. **Verify login:** Tap again for a fresh code and run `@yubi-login <code>` on each surface you use (CLI, Telegram, WhatsApp, Web). Each surface logs in separately and stays unlocked for `security_unlock_minutes`.
+  4. **Daily use:** Tap the key and send `@yubi-login <code>` whenever a surface is locked. Other factors (PIN/OTP) are not required once a YubiKey is enrolled and authenticated.
+  5. **Lock/drop:** `@yubi-lock` to require a fresh tap; `@yubi-status` to inspect; `@yubi-remove <code>` to unenroll (pass the code inline if not already authenticated).
+  6. **Storage:** Only the 12-character public id (`yubikey_id`) plus metadata (`yubikey_set_at`, `yubikey_label`, `yubikey_last_otp` for replay protection), optional per-key PIN (hashed, `yubikey_pin_*`), automode flag (`yubikey_automode`), and any pending enrollment state (`yubikey_pending_id`, `yubikey_pending_label`, `yubikey_pending_at`, `yubikey_pending_pin_*`) is stored in `app_settings.json` under the `yubikey_*` keys — managed only via `@yubi-*`, never via `@set-setting`. The device secret never leaves the key. Auth state is in-memory and expires, so a restart always re-locks. **Lost-key recovery: stop the bot and delete the `yubikey_*` keys from `app_settings.json`, then re-enroll.** When Yubico cloud credentials (`yubico_client_id` + `yubico_api_key`) are configured, OTP verification is delegated to the `yub` library instead of a hand-rolled client.
+  7. **Automode (optional):** Bind a PIN to the enrolled key with `@yubi-set pin <6+ digits>` (or pass it inline during staging: `@yubi-set <code> <pin>`), then `@yubi-set confirm`. Automode auto-generates 44-char codes and auto-logs in every surface; `@yubi-lock` forces a fresh login, `@yubi-login <code>` clears a manual lock.
+* **⚠️ Manual YubiKey data clearing (if commands fail or for emergency recovery):**
+  1. Stop the bot (`exit` / `quit` or Ctrl+C).
+  2. Open `app_settings.json` in a text editor.
+  3. Delete or clear these keys: `yubikey_id`, `yubikey_set_at`, `yubikey_label`, `yubikey_last_otp`, `yubikey_pending_id`, `yubikey_pending_label`, `yubikey_pending_at`, `yubikey_pin_hash`, `yubikey_pin_salt`, `yubikey_pin_set_at`, `yubikey_pending_pin_hash`, `yubikey_pending_pin_salt`, `yubikey_automode` (set to `false` or remove).
+  4. Save the file and restart the bot. The YubiKey enrollment is now fully cleared.
+  5. (Optional) If you configured Yubico cloud credentials, also clear `yubico_client_id` and `yubico_api_key`.
+
 ### 🔍 Search & Web Browser
 * `@fact-check <claim> [--limit N] [--source auto|papers|gemini] [--model <gemini-model>] [--no-verdict]` (or `@factcheck`, `@verify`) — Search Semantic Scholar (`src/factcheck_api.js`) for papers (title, abstract, year, citation count, DOI, open-access PDF) to verify a claim. Anonymous access works; set `SEMANTIC_SCHOLAR_API_KEY` (or `@set-api-key semanticscholar <key>`) to raise rate limits. With `GEMINI_API_KEY` (or `@set-api-key gemini <key>`) a Gemini verdict is added on top (`--source gemini` for verdict only, `--no-verdict` for papers only). Tune with `@set-setting factcheck_max_results <1-10>` / `@set-setting factcheck_source <auto|papers|gemini>`. Also available to the coding agent as `fact_check_papers`.
 * `@needle <request>` — On-device routing via cactus-needle (`src/needle.js` + `src/needle_bridge.py`): picks a local tool (remember / task / note / timer) with grammar-guaranteed args + confidence; executes only at/above `needle_min_confidence` (default 0.7, `@set-setting needle_min_confidence <0-1>`), otherwise shows the proposal for confirmation. Needs `pip install cactus-needle` (weights download once, then offline); custom model via `@set-setting needle_model_path <file.cact>`.
@@ -845,8 +867,8 @@ This public repository ships **without any credentials**:
 * `app_settings.json` contains the full current settings schema with all
   secrets empty (`*_api_key`, `*_secret`, `telegram_token`,
   `wordpress_*`, `blogger_*`, `spotify_*`, `youtube_api_key`,
-  `brave/tavily` keys) and **no security PIN or OTP enrolled**
-  (`security_pin_hash` / `otp_secret` are empty), so the project is
+  `brave/tavily` keys) and **no security PIN, OTP, or YubiKey enrolled**
+  (`security_pin_hash` / `otp_secret` / `yubikey_id` are empty), so the project is
   **not locked** — all `@` control commands work immediately after setup.
 * `characters.json` ships with demo personas and no Telegram tokens.
 * Machine-specific runtime files are gitignored and never committed:
